@@ -82,7 +82,9 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
     if (!content) return;
     const socket = getSocket();
     if (!socket) return;
-    socket.emit('send_message', { roomId, content });
+    socket.emit('send_message', { roomId, content }, (ack: { ok?: boolean; error?: string }) => {
+      if (ack?.error) console.error('[send_message failed]', ack.error);
+    });
     socket.emit('typing_stop', { roomId });
     if (typingTimer.current) clearTimeout(typingTimer.current);
     setInput('');
