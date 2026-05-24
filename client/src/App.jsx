@@ -93,7 +93,7 @@ export default function App() {
   if (!isSignedIn) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div className="xp-window" style={{ width: 400 }}>
+        <div className="xp-window" style={{ width: 'fit-content' }}>
           <div className="xp-titlebar">
             <img src="/9.png" style={{ width: 14, height: 14, imageRendering: 'pixelated', marginRight: 4 }} />
             <span className="xp-titlebar-text">Sign In — Chat</span>
@@ -103,7 +103,7 @@ export default function App() {
               <button className="xp-btn close">✕</button>
             </div>
           </div>
-          <div style={{ background: '#d4d0c8', padding: 16 }}>
+          <div style={{ background: '#d4d0c8', padding: '4px 4px 0 4px' }}>
             <SignIn routing="hash" />
           </div>
         </div>
