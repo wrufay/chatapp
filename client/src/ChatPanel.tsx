@@ -35,7 +35,6 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
         const res = await fetch(`${API}/rooms/${roomId}/messages`, {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) return;
         const data = await res.json();
         if (Array.isArray(data)) setMessages(roomId!, data);
       } catch (err) {
