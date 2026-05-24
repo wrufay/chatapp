@@ -65,7 +65,6 @@ app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
      ) sub ORDER BY created_at ASC`,
     [req.params.id]
   );
-  console.log('[get messages] room=%s count=%s', req.params.id, result.rows.length);
   res.json(result.rows);
 });
 
@@ -155,16 +154,14 @@ io.on('connection', (socket) => {
   socket.on('send_message', async ({ roomId, content }, ack) => {
     try {
       if (!content || !content.trim()) return;
-      console.log('[send_message] roomId=%s userId=%s username=%s', roomId, socket.userId, socket.username);
       const result = await pool.query(
         'INSERT INTO messages (room_id, user_id, username, content) VALUES ($1, $2, $3, $4) RETURNING *',
         [roomId, socket.userId, socket.username, content.trim()]
       );
-      console.log('[send_message] saved id=%s', result.rows[0].id);
       io.to(`room:${roomId}`).emit('new_message', result.rows[0]);
       ack?.({ ok: true });
     } catch (err) {
-      console.error('[send_message] FAILED roomId=%s userId=%s error=%s', roomId, socket.userId, err.message);
+      console.error('[send_message] error:', err.message);
       ack?.({ error: err.message });
     }
   });
