@@ -13,6 +13,7 @@ const io = new Server(server, {
   cors: { origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true },
 });
 
+app.set('etag', false);
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(clerkMiddleware());
@@ -58,7 +59,6 @@ app.post('/rooms', requireAuth, async (req, res) => {
 
 // REST: GET /rooms/:id/messages
 app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
-  res.set('Cache-Control', 'no-store');
   const result = await pool.query(
     'SELECT * FROM messages WHERE room_id = $1 ORDER BY created_at ASC LIMIT 200',
     [req.params.id]
