@@ -19,7 +19,10 @@ export default function Sidebar({ onSelectRoom, onCreateRoom }) {
 
   return (
     <div className="sidebar">
-      <div className="sidebar-header">💬 Rooms</div>
+      <div className="sidebar-header">
+        <img src="/3.png" style={{ width: 14, height: 14, imageRendering: 'pixelated' }} />
+        Rooms
+      </div>
       <div className="sidebar-section">
         {rooms.map((room) => (
           <div
@@ -27,7 +30,8 @@ export default function Sidebar({ onSelectRoom, onCreateRoom }) {
             className={`room-item${activeRoomId === room.id ? ' active' : ''}`}
             onClick={() => onSelectRoom(room.id)}
           >
-            # {room.name}
+            <img src="/13.png" style={{ width: 14, height: 14, imageRendering: 'pixelated', flexShrink: 0 }} />
+            {room.name}
           </div>
         ))}
       </div>

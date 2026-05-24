@@ -9,7 +9,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   const messages = useStore((s) => s.messages[roomId]) ?? [];
   const typingUsers = useStore((s) => s.typingUsers[roomId]) ?? [];
   const setMessages = useStore((s) => s.setMessages);
-  const updateReaction = useStore((s) => s.updateReaction);
+  const setActiveRoom = useStore((s) => s.setActiveRoom);
   const [input, setInput] = useState('');
   const bottomRef = useRef(null);
   const typingTimer = useRef(null);
@@ -84,8 +84,8 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d4d0c8' }}>
         <div style={{ fontFamily: 'Tahoma', fontSize: 12, color: '#666', textAlign: 'center' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>💬</div>
-          Select a room to start chatting
+          <img src="/6.png" style={{ width: 48, height: 48, imageRendering: 'pixelated', marginBottom: 8 }} />
+          <div>Select a room to start chatting</div>
         </div>
       </div>
     );
@@ -100,7 +100,11 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
         <div className="xp-controls">
           <button className="xp-btn">─</button>
           <button className="xp-btn">□</button>
-          <button className="xp-btn close">✕</button>
+          <button className="xp-btn close" onClick={() => {
+            const socket = getSocket();
+            if (socket) socket.emit('leave_room', roomId);
+            setActiveRoom(null);
+          }}>✕</button>
         </div>
       </div>
       <div className="xp-body">

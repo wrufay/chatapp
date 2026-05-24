@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useUser, useAuth, SignIn } from '@clerk/clerk-react';
+import { useEffect, useState } from 'react';
+import { useUser, useAuth, SignIn, useClerk } from '@clerk/clerk-react';
 import { useStore } from './store';
 import { connectSocket, getSocket } from './socket';
 import Sidebar from './Sidebar';
@@ -20,6 +20,8 @@ function TaskbarRoomTab() {
 export default function App() {
   const { isSignedIn, user, isLoaded } = useUser();
   const { getToken } = useAuth();
+  const { signOut } = useClerk();
+  const [startOpen, setStartOpen] = useState(false);
   const setRooms = useStore((s) => s.setRooms);
   const addRoom = useStore((s) => s.addRoom);
   const activeRoomId = useStore((s) => s.activeRoomId);
@@ -81,17 +83,19 @@ export default function App() {
 
   if (!isLoaded) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#363732' }}>
-        <span style={{ fontFamily: 'Tahoma', fontSize: 12, color: '#dce1e9' }}>Loading…</span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <img src="/17.png" style={{ width: 48, height: 48, imageRendering: 'pixelated' }} />
+        <span style={{ fontFamily: 'Tahoma', fontSize: 11, color: '#dce1e9', marginTop: 8 }}>Loading…</span>
       </div>
     );
   }
 
   if (!isSignedIn) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#363732' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div className="xp-window" style={{ width: 400 }}>
           <div className="xp-titlebar">
+            <img src="/9.png" style={{ width: 14, height: 14, imageRendering: 'pixelated', marginRight: 4 }} />
             <span className="xp-titlebar-text">Sign In — Chat</span>
             <div className="xp-controls">
               <button className="xp-btn">─</button>
@@ -117,7 +121,7 @@ export default function App() {
           <div className="xp-controls">
             <button className="xp-btn">─</button>
             <button className="xp-btn">□</button>
-            <button className="xp-btn close">✕</button>
+            <button className="xp-btn close" onClick={() => signOut()}>✕</button>
           </div>
         </div>
         <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: '#d4d0c8' }}>
@@ -131,8 +135,31 @@ export default function App() {
         </div>
       </div>
 
+      {startOpen && (
+        <div style={{
+          position: 'fixed', bottom: 36, left: 6, zIndex: 200,
+          background: '#d4d0c8', border: '2px solid', borderColor: '#fff #808080 #808080 #fff',
+          boxShadow: '2px 2px 0 #000', minWidth: 180,
+        }} onClick={() => setStartOpen(false)}>
+          <div style={{ background: 'linear-gradient(to bottom, #0a246a, #a6caf0)', padding: '8px 10px', color: 'white', fontFamily: 'Tahoma', fontSize: 11, fontWeight: 'bold' }}>
+            {username}
+          </div>
+          <div style={{ padding: 4 }}>
+            <button onClick={() => signOut()} style={{
+              width: '100%', textAlign: 'left', padding: '4px 8px',
+              fontFamily: 'Tahoma', fontSize: 11, background: 'none',
+              border: 'none', cursor: 'url(\'/14.png\') 0 0, pointer', display: 'flex', alignItems: 'center', gap: 8,
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#0a246a' || (e.currentTarget.style.color = 'white')}
+              onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+              <img src="/9.png" style={{ width: 16, height: 16, imageRendering: 'pixelated' }} />
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
       <div className="taskbar">
-        <button className="taskbar-start">⊞ Start</button>
+        <button className="taskbar-start" onClick={() => setStartOpen(v => !v)}>⊞ Start</button>
         <TaskbarRoomTab />
         <Clock />
       </div>
