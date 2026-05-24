@@ -56,6 +56,12 @@ export default function App() {
         setReadReceipts(roomId, reads)
       );
 
+      // If the server restarts, socket.io room state is wiped. Rejoin the active room on reconnect.
+      socket.on('connect', () => {
+        const activeRoom = useStore.getState().activeRoomId;
+        if (activeRoom) socket.emit('join_room', activeRoom);
+      });
+
       const res = await fetch(`${API}/rooms`, {
         headers: { Authorization: `Bearer ${token}` },
       });

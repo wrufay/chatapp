@@ -30,12 +30,17 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   useEffect(() => {
     if (!roomId) return;
     async function load() {
-      const token = await getToken();
-      const res = await fetch(`${API}/rooms/${roomId}/messages`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const data = await res.json();
-      setMessages(roomId!, data);
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API}/rooms/${roomId}/messages`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (Array.isArray(data)) setMessages(roomId!, data);
+      } catch (err) {
+        console.error('Failed to load messages:', err);
+      }
     }
     load();
   }, [roomId]);

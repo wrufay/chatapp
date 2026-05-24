@@ -115,49 +115,59 @@ async function getRoomReads(roomId) {
   return reads;
 }
 
+function wrapAsync(fn) {
+  return async (...args) => {
+    try {
+      await fn(...args);
+    } catch (err) {
+      console.error(`[socket error] ${fn.name || 'handler'}:`, err);
+    }
+  };
+}
+
 io.on('connection', (socket) => {
-  socket.on('join_room', async (roomId) => {
+  socket.on('join_room', wrapAsync(async (roomId) => {
     socket.join(`room:${roomId}`);
     await redis.sadd(`room:${roomId}:members`, socket.userId);
     const members = await redis.smembers(`room:${roomId}:members`);
     io.to(`room:${roomId}`).emit('presence', { roomId, members });
     socket.emit('read_update', { roomId, reads: await getRoomReads(roomId) });
-  });
+  }));
 
-  socket.on('mark_read', async ({ roomId, messageId }) => {
+  socket.on('mark_read', wrapAsync(async ({ roomId, messageId }) => {
     await redis.set(`room:${roomId}:read:${socket.userId}`, JSON.stringify({ messageId, username: socket.username }));
     io.to(`room:${roomId}`).emit('read_update', { roomId, reads: await getRoomReads(roomId) });
-  });
+  }));
 
-  socket.on('leave_room', async (roomId) => {
+  socket.on('leave_room', wrapAsync(async (roomId) => {
     socket.leave(`room:${roomId}`);
     await redis.srem(`room:${roomId}:members`, socket.userId);
     const members = await redis.smembers(`room:${roomId}:members`);
     io.to(`room:${roomId}`).emit('presence', { roomId, members });
     await redis.del(`room:${roomId}:typing:${socket.userId}`);
     io.to(`room:${roomId}`).emit('typing_update', await getTypingUsers(roomId));
-  });
+  }));
 
-  socket.on('send_message', async ({ roomId, content }) => {
+  socket.on('send_message', wrapAsync(async ({ roomId, content }) => {
     if (!content || !content.trim()) return;
     const result = await pool.query(
       'INSERT INTO messages (room_id, user_id, username, content) VALUES ($1, $2, $3, $4) RETURNING *',
       [roomId, socket.userId, socket.username, content.trim()]
     );
     io.to(`room:${roomId}`).emit('new_message', result.rows[0]);
-  });
+  }));
 
-  socket.on('typing_start', async ({ roomId }) => {
+  socket.on('typing_start', wrapAsync(async ({ roomId }) => {
     await redis.set(`room:${roomId}:typing:${socket.userId}`, socket.username, 'EX', 5);
     io.to(`room:${roomId}`).emit('typing_update', await getTypingUsers(roomId));
-  });
+  }));
 
-  socket.on('typing_stop', async ({ roomId }) => {
+  socket.on('typing_stop', wrapAsync(async ({ roomId }) => {
     await redis.del(`room:${roomId}:typing:${socket.userId}`);
     io.to(`room:${roomId}`).emit('typing_update', await getTypingUsers(roomId));
-  });
+  }));
 
-  socket.on('disconnecting', async () => {
+  socket.on('disconnecting', wrapAsync(async () => {
     for (const room of socket.rooms) {
       if (!room.startsWith('room:')) continue;
       const roomId = room.replace('room:', '');
@@ -167,7 +177,7 @@ io.on('connection', (socket) => {
       io.to(room).emit('presence', { roomId, members });
       io.to(room).emit('typing_update', await getTypingUsers(roomId));
     }
-  });
+  }));
 });
 
 async function getTypingUsers(roomId) {
