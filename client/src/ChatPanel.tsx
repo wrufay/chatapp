@@ -125,7 +125,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
           }}
         >←</button>
         <span className="xp-titlebar-text">
-          {room?.is_dm ? (room.dm_with ?? 'DM') : `#${room?.name || roomId}`}
+          {room?.is_dm ? (room.dm_with ?? 'DM') : room?.is_group ? room.name : `#${room?.name || roomId}`}
         </span>
         <div className="xp-controls">
           <button className="xp-btn">─</button>

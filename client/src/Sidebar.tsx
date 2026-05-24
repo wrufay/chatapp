@@ -9,20 +9,25 @@ interface Props {
   onSelectRoom: (id: string) => void;
   onCreateRoom: (name: string) => void;
   onStartDM: (userId: string) => void;
+  onCreateGroup: (name: string, memberIds: string[]) => void;
   getToken: () => Promise<string | null>;
   currentUserId: string;
 }
 
-export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, getToken, currentUserId }: Props) {
+export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreateGroup, getToken, currentUserId }: Props) {
   const rooms = useStore((s) => s.rooms);
   const activeRoomId = useStore((s) => s.activeRoomId);
   const [newRoomName, setNewRoomName] = useState('');
   const [creating, setCreating] = useState(false);
   const [dmPickerOpen, setDmPickerOpen] = useState(false);
+  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
 
-  const publicRooms = rooms.filter((r) => !r.is_dm);
+  const publicRooms = rooms.filter((r) => !r.is_dm && !r.is_group);
+  const groups = rooms.filter((r) => r.is_group);
   const dms = rooms.filter((r) => r.is_dm);
 
   async function handleCreate(e: React.FormEvent) {
@@ -33,8 +38,7 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, getToke
     setCreating(false);
   }
 
-  async function openDmPicker() {
-    setDmPickerOpen(true);
+  async function loadUsers() {
     setLoadingUsers(true);
     try {
       const token = await getToken();
@@ -46,6 +50,33 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, getToke
     } finally {
       setLoadingUsers(false);
     }
+  }
+
+  async function openDmPicker() {
+    setDmPickerOpen(true);
+    await loadUsers();
+  }
+
+  async function openGroupPicker() {
+    setGroupPickerOpen(true);
+    setGroupName('');
+    setSelectedMembers([]);
+    await loadUsers();
+  }
+
+  function toggleMember(userId: string) {
+    setSelectedMembers((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]
+    );
+  }
+
+  async function handleCreateGroup(e: React.FormEvent) {
+    e.preventDefault();
+    if (!groupName.trim() || selectedMembers.length === 0) return;
+    await onCreateGroup(groupName.trim(), selectedMembers);
+    setGroupPickerOpen(false);
+    setGroupName('');
+    setSelectedMembers([]);
   }
 
   return (
@@ -85,6 +116,77 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, getToke
         ) : (
           <button className="xp-button" style={{ width: '100%' }} onClick={() => setCreating(true)}>
             + New Room
+          </button>
+        )}
+      </div>
+
+      {/* ── Groups ── */}
+      <div className="sidebar-header" style={{ marginTop: 2 }}>
+        <img src={i3} style={{ width: 14, height: 14, imageRendering: 'pixelated' }} />
+        Groups
+      </div>
+      <div className="sidebar-section" style={{ flex: 'none' }}>
+        {groups.map((room) => (
+          <div
+            key={room.id}
+            className={`room-item${activeRoomId === room.id ? ' active' : ''}`}
+            onClick={() => onSelectRoom(room.id)}
+          >
+            <span style={{ fontSize: 11 }}>👥</span>
+            {room.name}
+          </div>
+        ))}
+      </div>
+      <div className="sidebar-footer">
+        {groupPickerOpen ? (
+          <form onSubmit={handleCreateGroup} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#333' }}>New group</span>
+              <button type="button" className="xp-button" style={{ padding: '1px 6px', fontSize: 10 }} onClick={() => setGroupPickerOpen(false)}>✕</button>
+            </div>
+            <input
+              className="xp-input"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="group name"
+              autoFocus
+            />
+            {loadingUsers ? (
+              <div style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#666', padding: '2px 0' }}>Loading…</div>
+            ) : users.length === 0 ? (
+              <div style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#666', padding: '2px 0' }}>No other users yet</div>
+            ) : (
+              <div style={{ maxHeight: 120, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {users.map((u) => (
+                  <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'Tahoma', fontSize: 11, cursor: 'pointer', padding: '2px 4px' }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedMembers.includes(u.id)}
+                      onChange={() => toggleMember(u.id)}
+                      style={{ margin: 0 }}
+                    />
+                    {u.image_url ? (
+                      <img src={u.image_url} style={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
+                    ) : (
+                      <span style={{ fontSize: 11 }}>👤</span>
+                    )}
+                    {u.username}
+                  </label>
+                ))}
+              </div>
+            )}
+            <button
+              type="submit"
+              className="xp-button"
+              style={{ width: '100%' }}
+              disabled={!groupName.trim() || selectedMembers.length === 0}
+            >
+              Create
+            </button>
+          </form>
+        ) : (
+          <button className="xp-button" style={{ width: '100%' }} onClick={openGroupPicker}>
+            + New Group
           </button>
         )}
       </div>

@@ -2,6 +2,7 @@ export interface Room {
   id: string;
   name: string;
   is_dm: boolean;
+  is_group: boolean;
   dm_with?: string;
   dm_with_image?: string;
 }

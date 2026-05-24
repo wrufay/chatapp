@@ -16,7 +16,8 @@ function TaskbarRoomTab() {
   const rooms = useStore((s) => s.rooms);
   if (!activeRoomId) return null;
   const room = rooms.find((r) => r.id === activeRoomId);
-  return <div className="taskbar-tab active">💬 #{room?.name || activeRoomId}</div>;
+  const label = room?.is_dm ? (room.dm_with ?? 'DM') : room?.is_group ? room.name : `#${room?.name || activeRoomId}`;
+  return <div className="taskbar-tab active">💬 {label}</div>;
 }
 
 export default function App() {
@@ -60,7 +61,13 @@ export default function App() {
         const me = user!.id;
         if (!members.some((m) => m.id === me)) return;
         const other = members.find((m) => m.id !== me)!;
-        addRoom({ id: roomId, name: '', is_dm: true, dm_with: other.username, dm_with_image: other.image_url });
+        addRoom({ id: roomId, name: '', is_dm: true, is_group: false, dm_with: other.username, dm_with_image: other.image_url });
+      });
+
+      socket.on('group_created', ({ roomId, name, members }: { roomId: string; name: string; members: { id: string }[] }) => {
+        const me = user!.id;
+        if (!members.some((m) => m.id === me)) return;
+        addRoom({ id: roomId, name, is_dm: false, is_group: true });
       });
 
       // If the server restarts, socket.io room state is wiped. Rejoin the active room on reconnect.
@@ -100,6 +107,23 @@ export default function App() {
       const err = await res.json();
       alert(err.error || 'Failed to create room');
     }
+  }
+
+  async function handleCreateGroup(name: string, memberIds: string[]) {
+    const token = await getToken();
+    const res = await fetch(`${API}/groups`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ name, memberIds }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || 'Failed to create group');
+      return;
+    }
+    const room = await res.json();
+    addRoom({ ...room, is_group: true });
+    handleSelectRoom(room.id);
   }
 
   async function handleStartDM(targetUserId: string) {
@@ -168,6 +192,7 @@ export default function App() {
             onSelectRoom={handleSelectRoom}
             onCreateRoom={handleCreateRoom}
             onStartDM={handleStartDM}
+            onCreateGroup={handleCreateGroup}
             getToken={getToken}
             currentUserId={user.id}
           />

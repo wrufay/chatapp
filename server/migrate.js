@@ -28,6 +28,7 @@ async function migrate() {
     );
 
     ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_dm BOOLEAN DEFAULT false;
+    ALTER TABLE rooms ADD COLUMN IF NOT EXISTS is_group BOOLEAN DEFAULT false;
 
     CREATE TABLE IF NOT EXISTS room_members (
       room_id INTEGER REFERENCES rooms(id) ON DELETE CASCADE,

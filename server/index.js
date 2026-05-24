@@ -47,7 +47,7 @@ app.get('/rooms', requireAuth, async (req, res) => {
         WHERE rm.room_id = r.id AND rm.user_id != $1 LIMIT 1
       ) END) AS dm_with_image
     FROM rooms r
-    WHERE r.is_dm = false
+    WHERE (r.is_dm = false AND r.is_group = false)
        OR EXISTS (SELECT 1 FROM room_members rm WHERE rm.room_id = r.id AND rm.user_id = $1)
     ORDER BY r.created_at ASC
   `, [req.userId]);
@@ -127,6 +127,41 @@ app.post('/dms', requireAuth, async (req, res) => {
     WHERE r.id = $2
   `, [currentUserId, roomId]);
   res.json(room.rows[0]);
+});
+
+// REST: POST /groups — create a private group chat
+app.post('/groups', requireAuth, async (req, res) => {
+  const { name, memberIds } = req.body;
+  if (!name?.trim()) return res.status(400).json({ error: 'Name required' });
+  if (!Array.isArray(memberIds) || memberIds.length === 0)
+    return res.status(400).json({ error: 'At least one other member required' });
+
+  const allMembers = [...new Set([req.userId, ...memberIds])];
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const roomRow = await client.query(
+      'INSERT INTO rooms (name, created_by, is_group) VALUES ($1, $2, true) RETURNING *',
+      [name.trim(), req.userId]
+    );
+    const roomId = roomRow.rows[0].id;
+    for (const userId of allMembers) {
+      await client.query('INSERT INTO room_members (room_id, user_id) VALUES ($1, $2)', [roomId, userId]);
+    }
+    await client.query('COMMIT');
+
+    const members = await pool.query(
+      'SELECT id, username, image_url FROM users WHERE id = ANY($1)',
+      [allMembers]
+    );
+    io.emit('group_created', { roomId: String(roomId), name: name.trim(), members: members.rows });
+    res.json({ ...roomRow.rows[0], id: String(roomRow.rows[0].id) });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 // REST: POST /rooms
@@ -219,8 +254,8 @@ function wrapAsync(fn) {
 
 io.on('connection', (socket) => {
   socket.on('join_room', wrapAsync(async (roomId) => {
-    const roomRow = await pool.query('SELECT is_dm FROM rooms WHERE id = $1', [roomId]);
-    if (roomRow.rows[0]?.is_dm) {
+    const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [roomId]);
+    if (roomRow.rows[0]?.is_dm || roomRow.rows[0]?.is_group) {
       const member = await pool.query(
         'SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2',
         [roomId, socket.userId]
