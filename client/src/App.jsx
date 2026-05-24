@@ -121,6 +121,7 @@ export default function App() {
           <ChatPanel
             roomId={activeRoomId}
             currentUserId={user.id}
+            currentUsername={username}
             getToken={getToken}
           />
         </div>

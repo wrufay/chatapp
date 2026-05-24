@@ -14,11 +14,12 @@ function getAccentColor(username) {
   return colors[sum % colors.length];
 }
 
-export default function Message({ msg, currentUserId, onReact }) {
+export default function Message({ msg, prevMsg, currentUserId, onReact }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const reactions = msg.reactions || {};
   const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const accentColor = getAccentColor(msg.username);
+  const showMeta = !prevMsg || prevMsg.user_id !== msg.user_id;
 
   return (
     <div
@@ -26,10 +27,12 @@ export default function Message({ msg, currentUserId, onReact }) {
       onMouseEnter={() => {}}
       onMouseLeave={() => setPickerOpen(false)}
     >
-      <div className="message-meta">
-        <span className="message-username" style={{ color: accentColor }}>{msg.username}</span>
-        <span className="message-time">{time}</span>
-      </div>
+      {showMeta && (
+        <div className="message-meta">
+          <span className="message-username" style={{ color: accentColor }}>{msg.username}</span>
+          <span className="message-time">{time}</span>
+        </div>
+      )}
       <div className="message-content">{msg.content}</div>
 
       {Object.keys(reactions).length > 0 && (

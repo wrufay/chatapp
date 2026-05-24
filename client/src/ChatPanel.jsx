@@ -5,7 +5,7 @@ import Message from './Message';
 
 const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
-export default function ChatPanel({ roomId, currentUserId, getToken }) {
+export default function ChatPanel({ roomId, currentUserId, currentUsername, getToken }) {
   const messages = useStore((s) => s.messages[roomId]) ?? [];
   const typingUsers = useStore((s) => s.typingUsers[roomId]) ?? [];
   const setMessages = useStore((s) => s.setMessages);
@@ -13,6 +13,7 @@ export default function ChatPanel({ roomId, currentUserId, getToken }) {
   const [input, setInput] = useState('');
   const bottomRef = useRef(null);
   const typingTimer = useRef(null);
+  const inputRef = useRef('');
 
   const rooms = useStore((s) => s.rooms);
   const room = rooms.find((r) => r.id === roomId);
@@ -35,14 +36,21 @@ export default function ChatPanel({ roomId, currentUserId, getToken }) {
   }, [messages]);
 
   function handleInput(e) {
-    setInput(e.target.value);
+    const val = e.target.value;
+    setInput(val);
+    inputRef.current = val;
     const socket = getSocket();
     if (!socket) return;
-    socket.emit('typing_start', { roomId });
-    clearTimeout(typingTimer.current);
-    typingTimer.current = setTimeout(() => {
+    if (val.trim()) {
+      socket.emit('typing_start', { roomId });
+      clearTimeout(typingTimer.current);
+      typingTimer.current = setTimeout(() => {
+        if (!inputRef.current.trim()) socket.emit('typing_stop', { roomId });
+      }, 1500);
+    } else {
+      clearTimeout(typingTimer.current);
       socket.emit('typing_stop', { roomId });
-    }, 1500);
+    }
   }
 
   function handleKeyDown(e) {
@@ -83,7 +91,7 @@ export default function ChatPanel({ roomId, currentUserId, getToken }) {
     );
   }
 
-  const displayTyping = typingUsers.filter((u) => u !== currentUserId);
+  const displayTyping = typingUsers.filter((u) => u !== currentUsername);
 
   return (
     <div className="xp-window" style={{ flex: 1, margin: 0, borderRadius: 0, border: 'none', borderLeft: '1px solid #808080' }}>
@@ -97,10 +105,11 @@ export default function ChatPanel({ roomId, currentUserId, getToken }) {
       </div>
       <div className="xp-body">
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-          {messages.map((msg) => (
+          {messages.map((msg, i) => (
             <Message
               key={msg.id}
               msg={msg}
+              prevMsg={messages[i - 1]}
               currentUserId={currentUserId}
               onReact={(msgId, emoji) => handleReact(msgId, emoji)}
             />
