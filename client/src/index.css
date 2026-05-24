@@ -1,0 +1,212 @@
+@import url("https://fonts.googleapis.com/css2?family=Londrina+Outline&family=Mansalva&family=Stack+Sans+Notch:wght@200..700&family=VT323&display=swap");
+@import "tailwindcss";
+
+:root {
+  --charcoal: #363732;
+  --sky-aqua: #53d8fb;
+  --maya-blue: #66c3ff;
+  --soft-blossom: #d4afb9;
+  --alice-blue: #dce1e9;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--charcoal);
+  color: var(--alice-blue);
+  font-family: "Stack Sans Notch", sans-serif;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+#root { height: 100vh; display: flex; flex-direction: column; }
+
+.xp-window {
+  background: #d4d0c8;
+  border: 2px solid;
+  border-color: #ffffff #808080 #808080 #ffffff;
+  box-shadow: 2px 2px 0 #000, inset 1px 1px 0 #dfdfdf;
+  border-radius: 6px 6px 2px 2px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.xp-titlebar {
+  background: linear-gradient(to right, #0a246a, #a6caf0);
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.xp-titlebar-text {
+  font-family: "Tahoma", sans-serif;
+  font-size: 11px;
+  font-weight: bold;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xp-controls { display: flex; gap: 2px; flex-shrink: 0; }
+
+.xp-btn {
+  width: 18px; height: 16px; font-size: 9px;
+  border: 1px solid rgba(255,255,255,0.35);
+  border-radius: 2px;
+  background: rgba(255,255,255,0.18);
+  color: white;
+  font-family: "Tahoma", sans-serif;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  line-height: 1;
+}
+.xp-btn:hover { background: rgba(255,255,255,0.3); }
+.xp-btn.close:hover { background: #d93025; }
+
+.xp-body {
+  background: #fff;
+  border: 1px solid #808080;
+  margin: 4px;
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #d4d0c8; }
+::-webkit-scrollbar-thumb { background: #9a9a9a; border: 1px solid #fff; }
+::-webkit-scrollbar-thumb:hover { background: #777; }
+
+.taskbar {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 36px;
+  background: linear-gradient(to bottom, #484848, #1e1e1e);
+  border-top: 1px solid #555;
+  display: flex; align-items: center;
+  padding: 0 6px; gap: 4px; z-index: 100; flex-shrink: 0;
+}
+
+.taskbar-start {
+  background: linear-gradient(to bottom, #4a8c4a, #2c6b2c);
+  border: 1px solid #1e4e1e;
+  border-radius: 10px 4px 4px 10px;
+  padding: 2px 12px 2px 10px;
+  font-family: "Tahoma", sans-serif; font-size: 11px; font-weight: bold;
+  color: white; cursor: pointer; height: 26px;
+  display: flex; align-items: center;
+}
+.taskbar-start:hover { filter: brightness(1.15); }
+
+.taskbar-tab {
+  background: linear-gradient(to bottom, #555, #333);
+  border: 1px solid #666; border-radius: 3px;
+  padding: 2px 10px;
+  font-family: "Tahoma", sans-serif; font-size: 11px; color: #ccc;
+  cursor: pointer; height: 26px; display: flex; align-items: center;
+  max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.taskbar-tab.active { background: linear-gradient(to bottom, #777, #555); color: white; border-color: #888; }
+
+.taskbar-clock {
+  margin-left: auto;
+  font-family: "Tahoma", sans-serif; font-size: 11px; color: #ddd;
+  background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 2px;
+}
+
+.dialog-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  z-index: 300; display: flex; align-items: center; justify-content: center;
+}
+
+.message-row {
+  display: flex; flex-direction: column;
+  padding: 4px 8px; position: relative;
+}
+.message-row:hover { background: #f5f5f5; }
+
+.message-meta { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; }
+.message-username { font-family: "Tahoma", sans-serif; font-size: 11px; font-weight: bold; }
+.message-time { font-family: "VT323", monospace; font-size: 12px; color: #999; letter-spacing: 0.03em; }
+.message-content { font-family: "Stack Sans Notch", sans-serif; font-size: 13px; color: #222; line-height: 1.5; word-break: break-word; }
+
+.message-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.reaction-pill {
+  background: #e8e8e8; border: 1px solid #ccc; border-radius: 10px;
+  padding: 1px 6px; font-size: 12px; cursor: pointer;
+  font-family: "Tahoma", sans-serif; display: flex; align-items: center; gap: 3px;
+}
+.reaction-pill:hover { background: #d4d0c8; }
+.reaction-pill.mine { background: #cce5ff; border-color: #a6caf0; }
+
+.reaction-picker {
+  position: absolute; right: 8px; top: 4px;
+  background: #d4d0c8; border: 2px solid;
+  border-color: #ffffff #808080 #808080 #ffffff;
+  box-shadow: 2px 2px 0 #000; padding: 4px; display: flex; gap: 4px; z-index: 50;
+}
+.reaction-picker button { font-size: 16px; background: none; border: none; cursor: pointer; padding: 2px; border-radius: 2px; }
+.reaction-picker button:hover { background: #a6caf0; }
+
+.sidebar {
+  width: 200px; background: #d4d0c8;
+  border-right: 2px solid; border-color: #fff #808080 #808080 #fff;
+  display: flex; flex-direction: column; flex-shrink: 0;
+}
+
+.sidebar-header {
+  background: linear-gradient(to right, #0a246a, #a6caf0);
+  padding: 6px 8px; font-family: "Tahoma", sans-serif;
+  font-size: 11px; font-weight: bold; color: white;
+}
+
+.sidebar-section { padding: 4px 0; flex: 1; overflow-y: auto; }
+
+.room-item {
+  padding: 4px 10px; font-family: "Tahoma", sans-serif; font-size: 11px;
+  cursor: pointer; color: #333; display: flex; align-items: center; gap: 6px;
+}
+.room-item:hover { background: #a6caf0; color: white; }
+.room-item.active { background: #0a246a; color: white; }
+
+.sidebar-footer { padding: 6px; border-top: 1px solid #808080; }
+
+.xp-input {
+  font-family: "Tahoma", sans-serif; font-size: 11px;
+  border: 2px inset #808080; padding: 3px 5px; width: 100%;
+  background: white; color: #333; outline: none;
+}
+.xp-input:focus { border-color: #0a246a; }
+
+.xp-button {
+  font-family: "Tahoma", sans-serif; font-size: 11px;
+  background: #d4d0c8; border: 2px solid;
+  border-color: #fff #808080 #808080 #fff;
+  padding: 3px 10px; cursor: pointer; color: #333;
+}
+.xp-button:hover { background: #bbb8b0; }
+.xp-button:active { border-color: #808080 #fff #fff #808080; }
+
+.chat-input-area {
+  border-top: 1px solid #d4d0c8; padding: 6px;
+  background: #efefef; display: flex; gap: 4px;
+}
+
+.typing-indicator {
+  padding: 2px 8px; font-family: "Tahoma", sans-serif;
+  font-size: 10px; color: #666; min-height: 16px; font-style: italic;
+}
+
+@keyframes name-fade {
+  0%   { opacity: 0; transform: translateY(28px); }
+  60%  { opacity: 1; transform: translateY(-4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes just-fade {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
