@@ -60,7 +60,9 @@ app.post('/rooms', requireAuth, async (req, res) => {
 // REST: GET /rooms/:id/messages
 app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
   const result = await pool.query(
-    'SELECT * FROM messages WHERE room_id = $1 ORDER BY created_at ASC LIMIT 200',
+    `SELECT * FROM (
+       SELECT * FROM messages WHERE room_id = $1 ORDER BY created_at DESC LIMIT 200
+     ) sub ORDER BY created_at ASC`,
     [req.params.id]
   );
   console.log('[get messages] room=%s count=%s', req.params.id, result.rows.length);
