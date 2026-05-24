@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
+import Picker from '@emoji-mart/react';
+import data from '@emoji-mart/data';
 import { useStore } from './store';
 import { getSocket } from './socket';
 import Message from './Message';
 import { i6 } from './assets/images';
+import type { Message as MessageType } from './types';
 
 const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -20,6 +23,20 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   const setMessages = useStore((s) => s.setMessages);
   const setActiveRoom = useStore((s) => s.setActiveRoom);
   const [input, setInput] = useState('');
+  const [replyTo, setReplyTo] = useState<{ id: string; username: string; content: string } | null>(null);
+  const [pendingImage, setPendingImage] = useState<{ file: File; previewUrl: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
+  const [doubleTapEmoji, setDoubleTapEmoji] = useState(() => localStorage.getItem('doubleTapEmoji') ?? '❤️');
+
+  function handleChangeDoubleTap(emoji: string) {
+    setDoubleTapEmoji(emoji);
+    localStorage.setItem('doubleTapEmoji', emoji);
+  }
+  const [emojiSuggestions, setEmojiSuggestions] = useState<{ id: string; native: string }[]>([]);
+  const [suggestionIndex, setSuggestionIndex] = useState(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const domInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef('');
@@ -48,8 +65,51 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
     if (socket) socket.emit('mark_read', { roomId, messageId: lastId });
   }, [messages]);
 
+  function insertEmoji(native: string) {
+    const el = domInputRef.current;
+    const start = el?.selectionStart ?? input.length;
+    const end = el?.selectionEnd ?? input.length;
+    const newVal = input.slice(0, start) + native + input.slice(end);
+    setInput(newVal);
+    inputRef.current = newVal;
+    requestAnimationFrame(() => {
+      if (el) { el.selectionStart = el.selectionEnd = start + [...native].length; el.focus(); }
+    });
+  }
+
+  function selectSuggestion(native: string) {
+    const openMatch = inputRef.current.match(/:([a-zA-Z0-9_+-]{1,})$/);
+    const newVal = openMatch ? inputRef.current.slice(0, -openMatch[0].length) + native : inputRef.current + native;
+    setInput(newVal);
+    inputRef.current = newVal;
+    setEmojiSuggestions([]);
+    setSuggestionIndex(0);
+    domInputRef.current?.focus();
+  }
+
   function handleInput(e: React.ChangeEvent<HTMLInputElement>) {
-    const val = e.target.value;
+    let val = e.target.value;
+    // Completed shortcode: replace immediately
+    const completed = val.match(/:([a-zA-Z0-9_+-]+):$/);
+    if (completed) {
+      const entry = (data as any).emojis[completed[1]];
+      if (entry) { val = val.slice(0, -completed[0].length) + entry.skins[0].native; setEmojiSuggestions([]); }
+    } else {
+      // Open shortcode: show suggestions
+      const open = val.match(/:([a-zA-Z0-9_+-]{2,})$/);
+      if (open) {
+        const q = open[1].toLowerCase();
+        const results = (Object.entries((data as any).emojis) as [string, any][])
+          .filter(([id]) => id.includes(q))
+          .sort(([a], [b]) => (a.startsWith(q) ? 0 : 1) - (b.startsWith(q) ? 0 : 1))
+          .slice(0, 8)
+          .map(([id, emoji]) => ({ id, native: emoji.skins[0].native }));
+        setEmojiSuggestions(results);
+        setSuggestionIndex(0);
+      } else {
+        setEmojiSuggestions([]);
+      }
+    }
     setInput(val);
     inputRef.current = val;
     const socket = getSocket();
@@ -67,21 +127,75 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (emojiSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setSuggestionIndex((i) => Math.min(i + 1, emojiSuggestions.length - 1)); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setSuggestionIndex((i) => Math.max(i - 1, 0)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); selectSuggestion(emojiSuggestions[suggestionIndex]?.native ?? ''); return; }
+      if (e.key === 'Escape') { setEmojiSuggestions([]); return; }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       send();
     }
   }
 
-  function send() {
+  function setPending(file: File) {
+    setPendingImage((prev) => {
+      if (prev) URL.revokeObjectURL(prev.previewUrl);
+      return { file, previewUrl: URL.createObjectURL(file) };
+    });
+  }
+
+  function clearPending() {
+    setPendingImage((prev) => { if (prev) URL.revokeObjectURL(prev.previewUrl); return null; });
+  }
+
+  async function send() {
     const content = input.trim();
-    if (!content) return;
+    if (!content && !pendingImage) return;
     const socket = getSocket();
     if (!socket) return;
-    socket.emit('send_message', { roomId, content });
-    socket.emit('typing_stop', { roomId });
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    setInput('');
+    setSending(true);
+    try {
+      let imageUrl: string | null = null;
+      if (pendingImage) {
+        const token = await getToken();
+        const form = new FormData();
+        form.append('image', pendingImage.file);
+        const res = await fetch(`${API}/upload`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+        const data = await res.json();
+        imageUrl = data.url ?? null;
+        clearPending();
+      }
+      socket.emit('send_message', { roomId, content, replyToId: replyTo?.id ?? null, imageUrl });
+      socket.emit('typing_stop', { roomId });
+      if (typingTimer.current) clearTimeout(typingTimer.current);
+      setInput('');
+      setReplyTo(null);
+      setEmojiPickerOpen(false);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) setPending(file);
+    e.target.value = '';
+  }
+
+  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) { setPending(file); e.preventDefault(); }
+        break;
+      }
+    }
+  }
+
+  function handleReply(msg: MessageType) {
+    setReplyTo({ id: msg.id, username: msg.username, content: msg.content });
   }
 
   async function handleReact(messageId: string, emoji: string) {
@@ -142,6 +256,9 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
                   prevMsg={messages[i - 1]}
                   currentUserId={currentUserId}
                   onReact={(msgId, emoji) => handleReact(msgId, emoji)}
+                  onReply={handleReply}
+                  doubleTapEmoji={doubleTapEmoji}
+                  onChangeDoubleTap={handleChangeDoubleTap}
                 />
                 {seenBy.length > 0 && (
                   <div style={{ padding: '0 8px 4px', fontFamily: 'Tahoma', fontSize: 10, color: '#999', fontStyle: 'italic' }}>
@@ -158,16 +275,79 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
             ? `${displayTyping.join(', ')} ${displayTyping.length === 1 ? 'is' : 'are'} typing…`
             : ''}
         </div>
-        <div className="chat-input-area">
-          <input
-            className="xp-input"
-            value={input}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder="Type a message…"
-            style={{ flex: 1 }}
-          />
-          <button className="xp-button" onClick={send}>Send</button>
+        {replyTo && (
+          <div className="reply-bar">
+            <span>↩ Replying to <strong>{replyTo.username}</strong>: {replyTo.content.length > 50 ? replyTo.content.slice(0, 50) + '…' : replyTo.content}</span>
+            <button className="reply-bar-cancel" onClick={() => setReplyTo(null)}>✕</button>
+          </div>
+        )}
+        {pendingImage && (
+          <div className="image-preview-bar">
+            <img src={pendingImage.previewUrl} alt="preview" className="image-preview-thumb" />
+            <span style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#555', flex: 1 }}>{pendingImage.file.name}</span>
+            <button className="reply-bar-cancel" onClick={clearPending}>✕</button>
+          </div>
+        )}
+        <div style={{ position: 'relative' }}>
+          {emojiSuggestions.length > 0 && (
+            <div style={{
+              position: 'absolute', bottom: '100%', left: 0, right: 0, zIndex: 210,
+              background: '#fff', border: '1px solid #808080', boxShadow: '2px 2px 0 #000',
+              fontFamily: 'Tahoma', fontSize: 12,
+            }}>
+              <div style={{ padding: '2px 8px', background: '#d4d0c8', borderBottom: '1px solid #ccc', fontSize: 10, color: '#555', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Emoji matching {inputRef.current.match(/:([a-zA-Z0-9_+-]{2,})$/)?.[0] ?? ''}
+              </div>
+              {emojiSuggestions.map((s, i) => (
+                <div
+                  key={s.id}
+                  onMouseDown={(e) => { e.preventDefault(); selectSuggestion(s.native); }}
+                  onMouseEnter={() => setSuggestionIndex(i)}
+                  style={{
+                    padding: '5px 10px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+                    background: i === suggestionIndex ? '#0a246a' : 'white',
+                    color: i === suggestionIndex ? 'white' : '#333',
+                  }}
+                >
+                  <span style={{ fontSize: 20, lineHeight: 1 }}>{s.native}</span>
+                  <span>:{s.id}:</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {emojiPickerOpen && (
+            <>
+              <div
+                style={{ position: 'fixed', inset: 0, zIndex: 190 }}
+                onClick={() => setEmojiPickerOpen(false)}
+              />
+              <div style={{ position: 'absolute', bottom: '100%', right: 0, zIndex: 200 }}>
+                <Picker
+                  data={data}
+                  onEmojiSelect={(emoji: any) => { insertEmoji(emoji.native); setEmojiPickerOpen(false); }}
+                  theme="light"
+                  previewPosition="none"
+                  skinTonePosition="none"
+                />
+              </div>
+            </>
+          )}
+          <div className="chat-input-area">
+            <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleFileChange} />
+            <button className="xp-button" onClick={() => fileInputRef.current?.click()} title="Attach image">🖼</button>
+            <input
+              ref={domInputRef}
+              className="xp-input"
+              value={input}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder="Type a message… or :shortcode:"
+              style={{ flex: 1 }}
+            />
+            <button className="xp-button" onClick={() => setEmojiPickerOpen((v) => !v)} title="Emoji">😊</button>
+            <button className="xp-button" onClick={send} disabled={sending}>{sending ? '…' : 'Send'}</button>
+          </div>
         </div>
       </div>
     </div>

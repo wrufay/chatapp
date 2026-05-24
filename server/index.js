@@ -1,11 +1,28 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { clerkMiddleware, getAuth } = require('@clerk/express');
+const multer = require('multer');
 const pool = require('./db');
 const redis = require('./redis');
+
+const storage = multer.diskStorage({
+  destination: path.join(__dirname, 'uploads'),
+  filename: (_, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    cb(null, file.mimetype.startsWith('image/'));
+  },
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -16,6 +33,7 @@ const io = new Server(server, {
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(clerkMiddleware());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 function requireAuth(req, res, next) {
   const { userId } = getAuth(req);
@@ -32,6 +50,13 @@ async function upsertUser(userId, username, imageUrl) {
     [userId, username, imageUrl]
   );
 }
+
+// REST: POST /upload
+app.post('/upload', requireAuth, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image' });
+  const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  res.json({ url });
+});
 
 // REST: GET /rooms
 app.get('/rooms', requireAuth, async (req, res) => {
@@ -59,7 +84,10 @@ app.post('/rooms', requireAuth, async (req, res) => {
 // REST: GET /rooms/:id/messages
 app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
   const result = await pool.query(
-    'SELECT * FROM messages WHERE room_id = $1 ORDER BY created_at ASC LIMIT 200',
+    `SELECT m.*, rm.username AS reply_to_username, rm.content AS reply_to_content
+     FROM messages m
+     LEFT JOIN messages rm ON m.reply_to_id = rm.id
+     WHERE m.room_id = $1 ORDER BY m.created_at ASC LIMIT 200`,
     [req.params.id]
   );
   res.json(result.rows);
@@ -138,13 +166,21 @@ io.on('connection', (socket) => {
     io.to(`room:${roomId}`).emit('typing_update', await getTypingUsers(roomId));
   });
 
-  socket.on('send_message', async ({ roomId, content }) => {
-    if (!content || !content.trim()) return;
+  socket.on('send_message', async ({ roomId, content, replyToId, imageUrl }) => {
+    const text = content ? content.trim() : '';
+    if (!text && !imageUrl) return;
     const result = await pool.query(
-      'INSERT INTO messages (room_id, user_id, username, content) VALUES ($1, $2, $3, $4) RETURNING *',
-      [roomId, socket.userId, socket.username, content.trim()]
+      'INSERT INTO messages (room_id, user_id, username, content, reply_to_id, image_url) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+      [roomId, socket.userId, socket.username, text, replyToId || null, imageUrl || null]
     );
-    io.to(`room:${roomId}`).emit('new_message', result.rows[0]);
+    let msg = result.rows[0];
+    if (msg.reply_to_id) {
+      const reply = await pool.query('SELECT username, content FROM messages WHERE id = $1', [msg.reply_to_id]);
+      if (reply.rows.length) {
+        msg = { ...msg, reply_to_username: reply.rows[0].username, reply_to_content: reply.rows[0].content };
+      }
+    }
+    io.to(`room:${roomId}`).emit('new_message', msg);
   });
 
   socket.on('typing_start', async ({ roomId }) => {

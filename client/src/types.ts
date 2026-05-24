@@ -11,6 +11,10 @@ export interface Message {
   content: string;
   created_at: string;
   reactions: Record<string, string[]>;
+  reply_to_id?: string | null;
+  reply_to_username?: string | null;
+  reply_to_content?: string | null;
+  image_url?: string | null;
 }
 
 export interface ReadReceipt {
