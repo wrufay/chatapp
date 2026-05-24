@@ -213,9 +213,10 @@ body {
 }
 
 /* ── Responsive ───────────────────────────── */
-.chat-layout { display: flex; flex: 1; overflow: hidden; background: #d4d0c8; }
-.chat-area   { flex: 1; display: flex; overflow: hidden; }
-.mobile-back { display: none; }
+.chat-layout    { display: flex; flex: 1; overflow: hidden; background: #d4d0c8; }
+.chat-area      { flex: 1; display: flex; overflow: hidden; }
+.mobile-back    { display: none; }
+.picker-backdrop { display: none; }
 
 @media (max-width: 640px) {
   body { cursor: auto; overflow: hidden; }
@@ -260,8 +261,32 @@ body {
   .message-username { font-size: 12px; }
   .message-row      { padding: 5px 10px; }
 
-  /* always-visible emoji trigger on touch */
-  .emoji-trigger { opacity: 0.55 !important; padding: 3px 7px !important; }
+  /* hide desktop hover trigger — long press opens picker on mobile */
+  .emoji-trigger { display: none !important; }
+
+  /* picker floats up from bottom center like iMessage */
+  .reaction-picker {
+    position: fixed !important;
+    bottom: 56px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    right: auto !important;
+    top: auto !important;
+    border-radius: 24px !important;
+    padding: 10px 16px !important;
+    gap: 12px !important;
+    z-index: 600 !important;
+  }
+  .reaction-picker button { font-size: 26px !important; padding: 4px !important; background: none !important; }
+  .reaction-picker button:hover { background: none !important; }
+
+  /* full-screen backdrop behind picker */
+  .picker-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 590;
+  }
 
   /* comfortable input bar */
   .chat-input-area { padding: 8px; gap: 6px; }

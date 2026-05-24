@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Message as MessageType } from './types';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -24,23 +24,53 @@ interface Props {
 
 export default function Message({ msg, prevMsg, currentUserId, onReact }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactions = msg.reactions ?? {};
   const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const accentColor = getAccentColor(msg.username);
   const showMeta = !prevMsg || prevMsg.user_id !== msg.user_id;
+
+  function startLongPress() {
+    longPressTimer.current = setTimeout(() => setPickerOpen(true), 450);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }
 
   return (
     <div
       className="message-row"
       onMouseLeave={() => setPickerOpen(false)}
     >
+      {/* backdrop — closes picker when tapping outside on mobile */}
+      {pickerOpen && (
+        <div
+          className="picker-backdrop"
+          onClick={() => setPickerOpen(false)}
+          onTouchStart={() => setPickerOpen(false)}
+        />
+      )}
+
       {showMeta && (
         <div className="message-meta">
           <span className="message-username" style={{ color: accentColor }}>{msg.username}</span>
           <span className="message-time">{time}</span>
         </div>
       )}
-      <div className="message-content">{msg.content}</div>
+
+      <div
+        className="message-content"
+        onTouchStart={startLongPress}
+        onTouchEnd={cancelLongPress}
+        onTouchMove={cancelLongPress}
+        onContextMenu={(e) => { if (pickerOpen) e.preventDefault(); }}
+      >
+        {msg.content}
+      </div>
 
       {Object.keys(reactions).length > 0 && (
         <div className="message-reactions">
@@ -56,6 +86,7 @@ export default function Message({ msg, prevMsg, currentUserId, onReact }: Props)
         </div>
       )}
 
+      {/* desktop hover picker */}
       <div
         className="reaction-picker"
         style={{ display: pickerOpen ? 'flex' : 'none' }}
