@@ -5,6 +5,7 @@ import { connectSocket, getSocket } from './socket';
 import Sidebar from './Sidebar';
 import ChatPanel from './ChatPanel';
 import Clock from './Clock';
+import { playNotification } from './notification';
 
 const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -35,7 +36,10 @@ export default function App() {
       const username = user.username || user.firstName || user.emailAddresses[0]?.emailAddress;
       const socket = connectSocket(user.id, username, user.imageUrl, token);
 
-      socket.on('new_message', (msg) => addMessage(msg));
+      socket.on('new_message', (msg) => {
+        addMessage(msg);
+        if (msg.user_id !== user.id) playNotification();
+      });
       socket.on('typing_update', ({ roomId, users }) => setTypingUsers(roomId, users));
       socket.on('room_created', (room) => addRoom(room));
       socket.on('reaction_updated', ({ roomId, messageId, reactions }) => {
