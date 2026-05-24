@@ -104,12 +104,29 @@ io.use(async (socket, next) => {
   next();
 });
 
+async function getRoomReads(roomId) {
+  const keys = await redis.keys(`room:${roomId}:read:*`);
+  const reads = {};
+  for (const key of keys) {
+    const userId = key.split(':')[3];
+    const val = await redis.get(key);
+    if (val) reads[userId] = JSON.parse(val);
+  }
+  return reads;
+}
+
 io.on('connection', (socket) => {
   socket.on('join_room', async (roomId) => {
     socket.join(`room:${roomId}`);
     await redis.sadd(`room:${roomId}:members`, socket.userId);
     const members = await redis.smembers(`room:${roomId}:members`);
     io.to(`room:${roomId}`).emit('presence', { roomId, members });
+    socket.emit('read_update', { roomId, reads: await getRoomReads(roomId) });
+  });
+
+  socket.on('mark_read', async ({ roomId, messageId }) => {
+    await redis.set(`room:${roomId}:read:${socket.userId}`, JSON.stringify({ messageId, username: socket.username }));
+    io.to(`room:${roomId}`).emit('read_update', { roomId, reads: await getRoomReads(roomId) });
   });
 
   socket.on('leave_room', async (roomId) => {

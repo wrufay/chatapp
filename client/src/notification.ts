@@ -1,13 +1,13 @@
-let ctx = null;
+let ctx: AudioContext | null = null;
 
-function getCtx() {
+function getCtx(): AudioContext {
   if (!ctx) ctx = new AudioContext();
   return ctx;
 }
 
-export function playNotification() {
+export function playNotification(): void {
   const ac = getCtx();
-  const notes = [880, 1108]; // A5, C#6 — hangouts-style two-tone ding
+  const notes = [880, 1108];
   let time = ac.currentTime;
 
   for (const freq of notes) {

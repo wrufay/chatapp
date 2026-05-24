@@ -6,6 +6,8 @@ import Sidebar from './Sidebar';
 import ChatPanel from './ChatPanel';
 import Clock from './Clock';
 import { playNotification } from './notification';
+import { dog, i9, i17 } from './assets/images';
+import type { Message, ReadReceipt, Room } from './types';
 
 const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -29,36 +31,42 @@ export default function App() {
   const addMessage = useStore((s) => s.addMessage);
   const setTypingUsers = useStore((s) => s.setTypingUsers);
   const updateReaction = useStore((s) => s.updateReaction);
+  const setReadReceipts = useStore((s) => s.setReadReceipts);
 
   useEffect(() => {
     if (!isSignedIn || !user) return;
 
     async function init() {
       const token = await getToken();
-      const username = user.username || user.firstName || user.emailAddresses[0]?.emailAddress;
-      const socket = connectSocket(user.id, username, user.imageUrl, token);
+      const username = user!.username ?? user!.firstName ?? user!.emailAddresses[0]?.emailAddress ?? '';
+      const socket = connectSocket(user!.id, username, user!.imageUrl ?? '', token ?? '');
 
-      socket.on('new_message', (msg) => {
+      socket.on('new_message', (msg: Message) => {
         addMessage(msg);
-        if (msg.user_id !== user.id) playNotification();
+        if (msg.user_id !== user!.id) playNotification();
       });
-      socket.on('typing_update', ({ roomId, users }) => setTypingUsers(roomId, users));
-      socket.on('room_created', (room) => addRoom(room));
-      socket.on('reaction_updated', ({ roomId, messageId, reactions }) => {
+      socket.on('typing_update', ({ roomId, users }: { roomId: string; users: string[] }) =>
+        setTypingUsers(roomId, users)
+      );
+      socket.on('room_created', (room: Room) => addRoom(room));
+      socket.on('reaction_updated', ({ roomId, messageId, reactions }: { roomId: string; messageId: string; reactions: Record<string, string[]> }) => {
         updateReaction(roomId, messageId, reactions);
       });
+      socket.on('read_update', ({ roomId, reads }: { roomId: string; reads: Record<string, ReadReceipt> }) =>
+        setReadReceipts(roomId, reads)
+      );
 
       const res = await fetch(`${API}/rooms`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const rooms = await res.json();
+      const rooms: Room[] = await res.json();
       setRooms(rooms);
     }
 
     init();
   }, [isSignedIn, user]);
 
-  async function handleSelectRoom(id) {
+  async function handleSelectRoom(id: string) {
     const prev = activeRoomId;
     const socket = getSocket();
     if (socket) {
@@ -68,7 +76,7 @@ export default function App() {
     setActiveRoom(id);
   }
 
-  async function handleCreateRoom(name) {
+  async function handleCreateRoom(name: string) {
     const token = await getToken();
     const res = await fetch(`${API}/rooms`, {
       method: 'POST',
@@ -84,7 +92,7 @@ export default function App() {
   if (!isLoaded) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <img src="/17.png" style={{ width: 48, height: 48, imageRendering: 'pixelated' }} />
+        <img src={i17} style={{ width: 48, height: 48, imageRendering: 'pixelated' }} />
         <span style={{ fontFamily: 'Tahoma', fontSize: 11, color: '#dce1e9', marginTop: 8 }}>Loading…</span>
       </div>
     );
@@ -95,8 +103,8 @@ export default function App() {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div className="xp-window" style={{ width: 'fit-content' }}>
           <div className="xp-titlebar">
-            <img src="/9.png" style={{ width: 14, height: 14, imageRendering: 'pixelated', marginRight: 4 }} />
-            <span className="xp-titlebar-text">Sign In — Chat</span>
+            <img src={i9} style={{ width: 14, height: 14, imageRendering: 'pixelated', marginRight: 4 }} />
+            <span className="xp-titlebar-text">Sign In — swwd gng</span>
             <div className="xp-controls">
               <button className="xp-btn">─</button>
               <button className="xp-btn">□</button>
@@ -111,13 +119,14 @@ export default function App() {
     );
   }
 
-  const username = user.username || user.firstName || user.emailAddresses[0]?.emailAddress;
+  const username = user.username ?? user.firstName ?? user.emailAddresses[0]?.emailAddress ?? '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <div className="xp-window" style={{ flex: 1, margin: 8, marginBottom: 44, overflow: 'hidden' }}>
         <div className="xp-titlebar">
-          <span className="xp-titlebar-text">💬 Chat — {username}</span>
+          <img src={dog} style={{ width: 16, height: 16, imageRendering: 'pixelated', marginRight: 4 }} />
+          <span className="xp-titlebar-text">swwd gng — {username}</span>
           <div className="xp-controls">
             <button className="xp-btn">─</button>
             <button className="xp-btn">□</button>
@@ -150,9 +159,9 @@ export default function App() {
               fontFamily: 'Tahoma', fontSize: 11, background: 'none',
               border: 'none', cursor: 'url(\'/14.png\') 0 0, pointer', display: 'flex', alignItems: 'center', gap: 8,
             }}
-              onMouseEnter={e => e.currentTarget.style.background = '#0a246a' || (e.currentTarget.style.color = 'white')}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-              <img src="/9.png" style={{ width: 16, height: 16, imageRendering: 'pixelated' }} />
+              onMouseEnter={e => { e.currentTarget.style.background = '#0a246a'; e.currentTarget.style.color = 'white'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = ''; }}>
+              <img src={i9} style={{ width: 16, height: 16, imageRendering: 'pixelated' }} />
               Sign Out
             </button>
           </div>
@@ -166,4 +175,3 @@ export default function App() {
     </div>
   );
 }
-

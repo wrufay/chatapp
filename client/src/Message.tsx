@@ -1,8 +1,9 @@
 import { useState } from 'react';
+import type { Message as MessageType } from './types';
 
 const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
-function getAccentColor(username) {
+function getAccentColor(username: string): string {
   if (!username) return '#333';
   const h = username.toLowerCase();
   if (h.includes('jackson')) return '#53d8fb';
@@ -14,9 +15,16 @@ function getAccentColor(username) {
   return colors[sum % colors.length];
 }
 
-export default function Message({ msg, prevMsg, currentUserId, onReact }) {
+interface Props {
+  msg: MessageType;
+  prevMsg?: MessageType;
+  currentUserId: string;
+  onReact: (msgId: string, emoji: string) => void;
+}
+
+export default function Message({ msg, prevMsg, currentUserId, onReact }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
-  const reactions = msg.reactions || {};
+  const reactions = msg.reactions ?? {};
   const time = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const accentColor = getAccentColor(msg.username);
   const showMeta = !prevMsg || prevMsg.user_id !== msg.user_id;
@@ -24,7 +32,6 @@ export default function Message({ msg, prevMsg, currentUserId, onReact }) {
   return (
     <div
       className="message-row"
-      onMouseEnter={() => {}}
       onMouseLeave={() => setPickerOpen(false)}
     >
       {showMeta && (
@@ -68,8 +75,8 @@ export default function Message({ msg, prevMsg, currentUserId, onReact }) {
         }}
         className="emoji-trigger"
         onClick={() => setPickerOpen((v) => !v)}
-        onMouseEnter={(e) => (e.currentTarget.style.opacity = 1)}
-        onMouseLeave={(e) => { if (!pickerOpen) e.currentTarget.style.opacity = 0; }}
+        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+        onMouseLeave={(e) => { if (!pickerOpen) e.currentTarget.style.opacity = '0'; }}
       >
         ☺
       </button>

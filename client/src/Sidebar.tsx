@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { useStore } from './store';
+import { i3, i13 } from './assets/images';
 
-const EMOJI_MAP = { '💬': true };
+interface Props {
+  onSelectRoom: (id: string) => void;
+  onCreateRoom: (name: string) => void;
+}
 
-export default function Sidebar({ onSelectRoom, onCreateRoom }) {
+export default function Sidebar({ onSelectRoom, onCreateRoom }: Props) {
   const rooms = useStore((s) => s.rooms);
   const activeRoomId = useStore((s) => s.activeRoomId);
   const [newRoomName, setNewRoomName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  async function handleCreate(e) {
+  async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!newRoomName.trim()) return;
     await onCreateRoom(newRoomName.trim());
@@ -20,7 +24,7 @@ export default function Sidebar({ onSelectRoom, onCreateRoom }) {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <img src="/3.png" style={{ width: 14, height: 14, imageRendering: 'pixelated' }} />
+        <img src={i3} style={{ width: 14, height: 14, imageRendering: 'pixelated' }} />
         Rooms
       </div>
       <div className="sidebar-section">
@@ -30,7 +34,7 @@ export default function Sidebar({ onSelectRoom, onCreateRoom }) {
             className={`room-item${activeRoomId === room.id ? ' active' : ''}`}
             onClick={() => onSelectRoom(room.id)}
           >
-            <img src="/13.png" style={{ width: 14, height: 14, imageRendering: 'pixelated', flexShrink: 0 }} />
+            <img src={i13} style={{ width: 14, height: 14, imageRendering: 'pixelated', flexShrink: 0 }} />
             {room.name}
           </div>
         ))}
