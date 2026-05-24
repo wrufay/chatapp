@@ -56,6 +56,13 @@ export default function App() {
         setReadReceipts(roomId, reads)
       );
 
+      socket.on('dm_created', ({ roomId, members }: { roomId: string; members: { id: string; username: string; image_url: string }[] }) => {
+        const me = user!.id;
+        if (!members.some((m) => m.id === me)) return;
+        const other = members.find((m) => m.id !== me)!;
+        addRoom({ id: roomId, name: '', is_dm: true, dm_with: other.username, dm_with_image: other.image_url });
+      });
+
       // If the server restarts, socket.io room state is wiped. Rejoin the active room on reconnect.
       socket.on('connect', () => {
         const activeRoom = useStore.getState().activeRoomId;
@@ -93,6 +100,23 @@ export default function App() {
       const err = await res.json();
       alert(err.error || 'Failed to create room');
     }
+  }
+
+  async function handleStartDM(targetUserId: string) {
+    const token = await getToken();
+    const res = await fetch(`${API}/dms`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ targetUserId }),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert(err.error || 'Failed to open DM');
+      return;
+    }
+    const room = await res.json();
+    addRoom(room);
+    handleSelectRoom(room.id);
   }
 
   if (!isLoaded) {
@@ -140,7 +164,13 @@ export default function App() {
           </div>
         </div>
         <div className={`chat-layout${activeRoomId ? ' has-room' : ''}`}>
-          <Sidebar onSelectRoom={handleSelectRoom} onCreateRoom={handleCreateRoom} />
+          <Sidebar
+            onSelectRoom={handleSelectRoom}
+            onCreateRoom={handleCreateRoom}
+            onStartDM={handleStartDM}
+            getToken={getToken}
+            currentUserId={user.id}
+          />
           <div className="chat-area">
             <ChatPanel
               roomId={activeRoomId}

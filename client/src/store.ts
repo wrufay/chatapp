@@ -26,7 +26,9 @@ export const useStore = create<StoreState>()((set) => ({
   readReceipts: {},
 
   setRooms: (rooms) => set({ rooms }),
-  addRoom: (room) => set((s) => ({ rooms: [...s.rooms, room] })),
+  addRoom: (room) => set((s) =>
+    s.rooms.some((r) => r.id === room.id) ? s : { rooms: [...s.rooms, room] }
+  ),
 
   setActiveRoom: (id) => set({ activeRoomId: id }),
 

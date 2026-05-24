@@ -34,10 +34,99 @@ async function upsertUser(userId, username, imageUrl) {
   );
 }
 
-// REST: GET /rooms
+// REST: GET /rooms — public rooms + DMs where the user is a member
 app.get('/rooms', requireAuth, async (req, res) => {
-  const result = await pool.query('SELECT * FROM rooms ORDER BY created_at ASC');
+  const result = await pool.query(`
+    SELECT r.*,
+      (CASE WHEN r.is_dm THEN (
+        SELECT u.username FROM room_members rm JOIN users u ON u.id = rm.user_id
+        WHERE rm.room_id = r.id AND rm.user_id != $1 LIMIT 1
+      ) END) AS dm_with,
+      (CASE WHEN r.is_dm THEN (
+        SELECT u.image_url FROM room_members rm JOIN users u ON u.id = rm.user_id
+        WHERE rm.room_id = r.id AND rm.user_id != $1 LIMIT 1
+      ) END) AS dm_with_image
+    FROM rooms r
+    WHERE r.is_dm = false
+       OR EXISTS (SELECT 1 FROM room_members rm WHERE rm.room_id = r.id AND rm.user_id = $1)
+    ORDER BY r.created_at ASC
+  `, [req.userId]);
   res.json(result.rows);
+});
+
+// REST: GET /users — everyone except yourself (for DM picker)
+app.get('/users', requireAuth, async (req, res) => {
+  const result = await pool.query(
+    'SELECT id, username, image_url FROM users WHERE id != $1 ORDER BY username ASC',
+    [req.userId]
+  );
+  res.json(result.rows);
+});
+
+// REST: POST /dms — create or retrieve a DM room between two users
+app.post('/dms', requireAuth, async (req, res) => {
+  const { targetUserId } = req.body;
+  const currentUserId = req.userId;
+  if (!targetUserId || targetUserId === currentUserId)
+    return res.status(400).json({ error: 'Invalid target user' });
+
+  const targetUser = await pool.query('SELECT * FROM users WHERE id = $1', [targetUserId]);
+  if (!targetUser.rows.length) return res.status(404).json({ error: 'User not found' });
+
+  const currentUser = await pool.query('SELECT * FROM users WHERE id = $1', [currentUserId]);
+
+  // Check for existing DM between these two users
+  const existing = await pool.query(`
+    SELECT r.id FROM rooms r
+    JOIN room_members a ON a.room_id = r.id AND a.user_id = $1
+    JOIN room_members b ON b.room_id = r.id AND b.user_id = $2
+    WHERE r.is_dm = true LIMIT 1
+  `, [currentUserId, targetUserId]);
+
+  let roomId;
+  if (existing.rows.length) {
+    roomId = existing.rows[0].id;
+  } else {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const roomRow = await client.query(
+        `INSERT INTO rooms (name, created_by, is_dm) VALUES ($1, $2, true) RETURNING *`,
+        [`dm:${currentUserId}:${targetUserId}`, currentUserId]
+      );
+      roomId = roomRow.rows[0].id;
+      await client.query(
+        'INSERT INTO room_members (room_id, user_id) VALUES ($1, $2), ($1, $3)',
+        [roomId, currentUserId, targetUserId]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Notify both users in real-time
+    io.emit('dm_created', {
+      roomId,
+      members: [
+        { id: currentUserId, username: currentUser.rows[0].username, image_url: currentUser.rows[0].image_url },
+        { id: targetUserId, username: targetUser.rows[0].username, image_url: targetUser.rows[0].image_url },
+      ],
+    });
+  }
+
+  // Return full room with dm_with from the requester's perspective
+  const room = await pool.query(`
+    SELECT r.*,
+      u.username AS dm_with, u.image_url AS dm_with_image
+    FROM rooms r
+    JOIN room_members rm ON rm.room_id = r.id AND rm.user_id != $1
+    JOIN users u ON u.id = rm.user_id
+    WHERE r.id = $2
+  `, [currentUserId, roomId]);
+  res.json(room.rows[0]);
 });
 
 // REST: POST /rooms
@@ -130,6 +219,14 @@ function wrapAsync(fn) {
 
 io.on('connection', (socket) => {
   socket.on('join_room', wrapAsync(async (roomId) => {
+    const roomRow = await pool.query('SELECT is_dm FROM rooms WHERE id = $1', [roomId]);
+    if (roomRow.rows[0]?.is_dm) {
+      const member = await pool.query(
+        'SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2',
+        [roomId, socket.userId]
+      );
+      if (!member.rows.length) return;
+    }
     socket.join(`room:${roomId}`);
     await redis.sadd(`room:${roomId}:members`, socket.userId);
     const members = await redis.smembers(`room:${roomId}:members`);
