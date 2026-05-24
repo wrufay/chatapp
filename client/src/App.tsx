@@ -101,7 +101,7 @@ export default function App() {
   if (!isSignedIn) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div className="xp-window" style={{ width: 'fit-content' }}>
+        <div className="xp-window signin-window" style={{ width: 'fit-content' }}>
           <div className="xp-titlebar">
             <img src={i9} style={{ width: 14, height: 14, imageRendering: 'pixelated', marginRight: 4 }} />
             <span className="xp-titlebar-text">Sign In — swwd gng</span>
@@ -123,7 +123,7 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <div className="xp-window" style={{ flex: 1, margin: 8, marginBottom: 44, overflow: 'hidden' }}>
+      <div className="xp-window app-outer-window" style={{ flex: 1, margin: 8, marginBottom: 44, overflow: 'hidden' }}>
         <div className="xp-titlebar">
           <img src={dog} style={{ width: 16, height: 16, imageRendering: 'pixelated', marginRight: 4 }} />
           <span className="xp-titlebar-text">swwd gng — {username}</span>
@@ -133,14 +133,16 @@ export default function App() {
             <button className="xp-btn close" onClick={() => signOut()}>✕</button>
           </div>
         </div>
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', background: '#d4d0c8' }}>
+        <div className={`chat-layout${activeRoomId ? ' has-room' : ''}`}>
           <Sidebar onSelectRoom={handleSelectRoom} onCreateRoom={handleCreateRoom} />
-          <ChatPanel
-            roomId={activeRoomId}
-            currentUserId={user.id}
-            currentUsername={username}
-            getToken={getToken}
-          />
+          <div className="chat-area">
+            <ChatPanel
+              roomId={activeRoomId}
+              currentUserId={user.id}
+              currentUsername={username}
+              getToken={getToken}
+            />
+          </div>
         </div>
       </div>
 

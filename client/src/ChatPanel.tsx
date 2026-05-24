@@ -109,6 +109,15 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   return (
     <div className="xp-window" style={{ flex: 1, margin: 0, borderRadius: 0, border: 'none', borderLeft: '1px solid #808080' }}>
       <div className="xp-titlebar">
+        <button
+          className="xp-btn mobile-back"
+          style={{ display: 'none', marginRight: 6 }}
+          onClick={() => {
+            const socket = getSocket();
+            if (socket) socket.emit('leave_room', roomId);
+            setActiveRoom(null);
+          }}
+        >←</button>
         <span className="xp-titlebar-text">#{room?.name || roomId}</span>
         <div className="xp-controls">
           <button className="xp-btn">─</button>

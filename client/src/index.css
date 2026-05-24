@@ -211,3 +211,66 @@ body {
   0%   { opacity: 0; }
   100% { opacity: 1; }
 }
+
+/* ── Responsive ───────────────────────────── */
+.chat-layout { display: flex; flex: 1; overflow: hidden; background: #d4d0c8; }
+.chat-area   { flex: 1; display: flex; overflow: hidden; }
+.mobile-back { display: none; }
+
+@media (max-width: 640px) {
+  body { cursor: auto; overflow: hidden; }
+
+  /* full-bleed app window — override inline margin/radius */
+  .app-outer-window {
+    margin: 0 !important;
+    margin-bottom: 36px !important;
+    border-radius: 0 !important;
+    border-left: none !important;
+    border-right: none !important;
+    border-top: none !important;
+  }
+
+  /* sign-in dialog stretches to fit narrow screens */
+  .signin-window {
+    width: calc(100vw - 24px) !important;
+    max-width: 400px;
+  }
+
+  /* one panel at a time */
+  .chat-layout { flex-direction: column; }
+  .chat-layout.has-room .sidebar { display: none; }
+  .chat-layout:not(.has-room) .chat-area { display: none; }
+
+  /* sidebar fills the screen */
+  .sidebar { width: 100%; border-right: none; }
+  .sidebar-header { padding: 10px 12px; font-size: 13px; }
+  .sidebar-footer { padding: 8px; }
+
+  /* bigger tap targets for rooms */
+  .room-item { padding: 11px 14px; font-size: 13px; }
+
+  /* chat panel — no left border, chat area fills height */
+  .chat-area .xp-window { border-left: none !important; }
+
+  /* back button visible on mobile */
+  .mobile-back { display: flex !important; margin-right: 6px; width: 26px; height: 22px; font-size: 13px; }
+
+  /* message text a touch larger */
+  .message-content  { font-size: 14px; }
+  .message-username { font-size: 12px; }
+  .message-row      { padding: 5px 10px; }
+
+  /* always-visible emoji trigger on touch */
+  .emoji-trigger { opacity: 0.55 !important; padding: 3px 7px !important; }
+
+  /* comfortable input bar */
+  .chat-input-area { padding: 8px; gap: 6px; }
+  .xp-input  { font-size: 14px; padding: 8px 6px; }
+  .xp-button { font-size: 13px; padding: 7px 14px; }
+
+  /* slightly larger titlebar buttons */
+  .xp-btn { width: 24px; height: 22px; font-size: 12px; }
+
+  /* room creation form */
+  .sidebar-footer .xp-button { padding: 8px 10px; font-size: 13px; }
+}
