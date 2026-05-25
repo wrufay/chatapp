@@ -137,6 +137,11 @@ app.post('/groups', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'At least one other member required' });
 
   const allMembers = [...new Set([req.userId, ...memberIds])];
+  const validCheck = await pool.query('SELECT id FROM users WHERE id = ANY($1)', [memberIds]);
+  const validIds = new Set(validCheck.rows.map((r) => r.id));
+  if (memberIds.some((id) => !validIds.has(id)))
+    return res.status(400).json({ error: 'One or more invalid member IDs' });
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -181,8 +186,36 @@ app.post('/rooms', requireAuth, async (req, res) => {
   }
 });
 
+// REST: GET /rooms/:id/members
+app.get('/rooms/:id/members', requireAuth, async (req, res) => {
+  const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [req.params.id]);
+  if (!roomRow.rows.length) return res.status(404).json({ error: 'Not found' });
+  if (roomRow.rows[0].is_dm || roomRow.rows[0].is_group) {
+    const member = await pool.query(
+      'SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2',
+      [req.params.id, req.userId]
+    );
+    if (!member.rows.length) return res.status(403).json({ error: 'Forbidden' });
+  }
+  const result = await pool.query(
+    `SELECT u.id, u.username, u.image_url FROM room_members rm
+     JOIN users u ON u.id = rm.user_id WHERE rm.room_id = $1`,
+    [req.params.id]
+  );
+  res.json(result.rows);
+});
+
 // REST: GET /rooms/:id/messages
 app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
+  const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [req.params.id]);
+  if (!roomRow.rows.length) return res.status(404).json({ error: 'Not found' });
+  if (roomRow.rows[0].is_dm || roomRow.rows[0].is_group) {
+    const member = await pool.query(
+      'SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2',
+      [req.params.id, req.userId]
+    );
+    if (!member.rows.length) return res.status(403).json({ error: 'Forbidden' });
+  }
   const result = await pool.query(
     `SELECT * FROM (
        SELECT * FROM messages WHERE room_id = $1 ORDER BY created_at DESC LIMIT 200
@@ -190,6 +223,51 @@ app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
     [req.params.id]
   );
   res.json(result.rows);
+});
+
+// REST: DELETE /rooms/:id/messages/:msgId — delete own message
+app.delete('/rooms/:id/messages/:msgId', requireAuth, async (req, res) => {
+  const existing = await pool.query('SELECT user_id, room_id FROM messages WHERE id = $1', [req.params.msgId]);
+  if (!existing.rows.length) return res.status(404).json({ error: 'Not found' });
+  if (existing.rows[0].user_id !== req.userId) return res.status(403).json({ error: 'Forbidden' });
+  await pool.query('DELETE FROM messages WHERE id = $1', [req.params.msgId]);
+  const roomId = existing.rows[0].room_id;
+  io.to(`room:${roomId}`).emit('message_deleted', { roomId: String(roomId), messageId: String(req.params.msgId) });
+  res.json({ ok: true });
+});
+
+// REST: DELETE /rooms/:id/membership — leave a DM or group
+app.delete('/rooms/:id/membership', requireAuth, async (req, res) => {
+  const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [req.params.id]);
+  if (!roomRow.rows.length) return res.status(404).json({ error: 'Not found' });
+  if (!roomRow.rows[0].is_dm && !roomRow.rows[0].is_group)
+    return res.status(400).json({ error: 'Cannot leave a public room' });
+  await pool.query('DELETE FROM room_members WHERE room_id = $1 AND user_id = $2', [req.params.id, req.userId]);
+  res.json({ ok: true });
+});
+
+// REST: POST /groups/:id/members — invite a user to a group
+app.post('/groups/:id/members', requireAuth, async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
+  const isMember = await pool.query(
+    'SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2',
+    [req.params.id, req.userId]
+  );
+  if (!isMember.rows.length) return res.status(403).json({ error: 'Forbidden' });
+  const targetUser = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+  if (!targetUser.rows.length) return res.status(404).json({ error: 'User not found' });
+  await pool.query(
+    'INSERT INTO room_members (room_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [req.params.id, userId]
+  );
+  const room = await pool.query('SELECT * FROM rooms WHERE id = $1', [req.params.id]);
+  io.emit('group_invited', {
+    roomId: String(req.params.id),
+    room: { id: String(req.params.id), name: room.rows[0].name, is_dm: false, is_group: true },
+    userId,
+  });
+  res.json({ ok: true });
 });
 
 // REST: POST /rooms/:id/messages/:msgId/react
@@ -286,6 +364,15 @@ io.on('connection', (socket) => {
   socket.on('send_message', async ({ roomId, content }, ack) => {
     try {
       if (!content || !content.trim()) return;
+      const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [roomId]);
+      if (!roomRow.rows.length) return ack?.({ error: 'Room not found' });
+      if (roomRow.rows[0].is_dm || roomRow.rows[0].is_group) {
+        const member = await pool.query(
+          'SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2',
+          [roomId, socket.userId]
+        );
+        if (!member.rows.length) return ack?.({ error: 'Not a member' });
+      }
       const result = await pool.query(
         'INSERT INTO messages (room_id, user_id, username, content) VALUES ($1, $2, $3, $4) RETURNING *',
         [roomId, socket.userId, socket.username, content.trim()]

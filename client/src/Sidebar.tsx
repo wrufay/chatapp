@@ -3,6 +3,18 @@ import { useStore } from './store';
 import { i3, i13 } from './assets/images';
 import type { User } from './types';
 
+function UnreadBadge({ count }: { count: number }) {
+  return (
+    <span style={{
+      background: '#cc0000', color: 'white', borderRadius: 8,
+      fontSize: 9, fontFamily: 'Tahoma', padding: '1px 4px',
+      minWidth: 14, textAlign: 'center', flexShrink: 0,
+    }}>
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
 const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 interface Props {
@@ -17,6 +29,7 @@ interface Props {
 export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreateGroup, getToken, currentUserId }: Props) {
   const rooms = useStore((s) => s.rooms);
   const activeRoomId = useStore((s) => s.activeRoomId);
+  const unreadCounts = useStore((s) => s.unreadCounts);
   const [newRoomName, setNewRoomName] = useState('');
   const [creating, setCreating] = useState(false);
   const [dmPickerOpen, setDmPickerOpen] = useState(false);
@@ -94,7 +107,8 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
             onClick={() => onSelectRoom(room.id)}
           >
             <img src={i13} style={{ width: 14, height: 14, imageRendering: 'pixelated', flexShrink: 0 }} />
-            {room.name}
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{room.name}</span>
+            {(unreadCounts[room.id] ?? 0) > 0 && <UnreadBadge count={unreadCounts[room.id]} />}
           </div>
         ))}
       </div>
@@ -133,7 +147,8 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
             onClick={() => onSelectRoom(room.id)}
           >
             <span style={{ fontSize: 11 }}>👥</span>
-            {room.name}
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{room.name}</span>
+            {(unreadCounts[room.id] ?? 0) > 0 && <UnreadBadge count={unreadCounts[room.id]} />}
           </div>
         ))}
       </div>
@@ -208,7 +223,8 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
             ) : (
               <span style={{ fontSize: 11 }}>👤</span>
             )}
-            {room.dm_with || room.name}
+            <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{room.dm_with || room.name}</span>
+            {(unreadCounts[room.id] ?? 0) > 0 && <UnreadBadge count={unreadCounts[room.id]} />}
           </div>
         ))}
       </div>

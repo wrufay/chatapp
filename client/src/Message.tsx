@@ -20,9 +20,10 @@ interface Props {
   prevMsg?: MessageType;
   currentUserId: string;
   onReact: (msgId: string, emoji: string) => void;
+  onDelete?: () => void;
 }
 
-export default function Message({ msg, prevMsg, currentUserId, onReact }: Props) {
+export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reactions = msg.reactions ?? {};
@@ -97,23 +98,38 @@ export default function Message({ msg, prevMsg, currentUserId, onReact }: Props)
         ))}
       </div>
 
-      <button
-        style={{
-          position: 'absolute', right: 8, top: 4,
-          opacity: 0, background: '#d4d0c8', border: '1px solid #808080',
-          cursor: 'pointer', fontSize: 11, fontFamily: 'Tahoma', padding: '1px 5px',
-          borderRadius: 2,
-        }}
-        className="emoji-trigger"
-        onClick={() => setPickerOpen((v) => !v)}
-        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
-        onMouseLeave={(e) => { if (!pickerOpen) e.currentTarget.style.opacity = '0'; }}
-      >
-        ☺
-      </button>
+      <div style={{ position: 'absolute', right: 8, top: 4, display: 'flex', gap: 2 }}>
+        {onDelete && (
+          <button
+            style={{
+              opacity: 0, background: '#d4d0c8', border: '1px solid #808080',
+              cursor: 'pointer', fontSize: 11, fontFamily: 'Tahoma', padding: '1px 5px',
+              borderRadius: 2,
+            }}
+            className="delete-trigger"
+            onClick={onDelete}
+          >
+            🗑
+          </button>
+        )}
+        <button
+          style={{
+            opacity: 0, background: '#d4d0c8', border: '1px solid #808080',
+            cursor: 'pointer', fontSize: 11, fontFamily: 'Tahoma', padding: '1px 5px',
+            borderRadius: 2,
+          }}
+          className="emoji-trigger"
+          onClick={() => setPickerOpen((v) => !v)}
+          onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }}
+          onMouseLeave={(e) => { if (!pickerOpen) e.currentTarget.style.opacity = '0'; }}
+        >
+          ☺
+        </button>
+      </div>
 
       <style>{`
         .message-row:hover .emoji-trigger { opacity: 1 !important; }
+        .message-row:hover .delete-trigger { opacity: 1 !important; }
       `}</style>
     </div>
   );

@@ -3,6 +3,7 @@ import { useStore } from './store';
 import { getSocket } from './socket';
 import Message from './Message';
 import { i6 } from './assets/images';
+import type { User } from './types';
 
 const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
@@ -11,9 +12,11 @@ interface Props {
   currentUserId: string;
   currentUsername: string;
   getToken: () => Promise<string | null>;
+  onDeleteMessage: (roomId: string, msgId: string) => void;
+  onLeaveRoom: (roomId: string) => void;
 }
 
-export default function ChatPanel({ roomId, currentUserId, currentUsername, getToken }: Props) {
+export default function ChatPanel({ roomId, currentUserId, currentUsername, getToken, onDeleteMessage, onLeaveRoom }: Props) {
   const messages = useStore((s) => (roomId ? s.messages[roomId] : undefined)) ?? [];
   const typingUsers = useStore((s) => (roomId ? s.typingUsers[roomId] : undefined)) ?? [];
   const readReceipts = useStore((s) => (roomId ? s.readReceipts[roomId] : undefined)) ?? {};
@@ -26,6 +29,11 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
 
   const rooms = useStore((s) => s.rooms);
   const room = rooms.find((r) => r.id === roomId);
+
+  const [groupMembers, setGroupMembers] = useState<User[]>([]);
+  const [invitePickerOpen, setInvitePickerOpen] = useState(false);
+  const [inviteUsers, setInviteUsers] = useState<User[]>([]);
+  const [loadingInvite, setLoadingInvite] = useState(false);
 
   useEffect(() => {
     if (!roomId) return;
@@ -43,6 +51,21 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
     }
     load();
   }, [roomId]);
+
+  useEffect(() => {
+    if (!roomId || !room?.is_group) { setGroupMembers([]); return; }
+    async function loadMembers() {
+      try {
+        const token = await getToken();
+        const res = await fetch(`${API}/rooms/${roomId}/members`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const data = await res.json();
+        if (Array.isArray(data)) setGroupMembers(data);
+      } catch {}
+    }
+    loadMembers();
+  }, [roomId, room?.is_group]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -99,6 +122,36 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
     });
   }
 
+  async function openInvitePicker() {
+    setInvitePickerOpen(true);
+    setLoadingInvite(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${API}/users`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const memberIds = new Set(groupMembers.map((m) => m.id));
+        setInviteUsers(data.filter((u: User) => !memberIds.has(u.id)));
+      }
+    } finally {
+      setLoadingInvite(false);
+    }
+  }
+
+  async function handleInvite(userId: string) {
+    const token = await getToken();
+    const res = await fetch(`${API}/groups/${roomId}/members`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ userId }),
+    });
+    if (res.ok) {
+      const invited = inviteUsers.find((u) => u.id === userId);
+      if (invited) setGroupMembers((prev) => [...prev, invited]);
+      setInviteUsers((prev) => prev.filter((u) => u.id !== userId));
+    }
+  }
+
   if (!roomId) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#d4d0c8' }}>
@@ -111,6 +164,8 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   }
 
   const displayTyping = typingUsers.filter((u) => u !== currentUsername);
+  const isPrivate = room?.is_dm || room?.is_group;
+  const title = room?.is_dm ? (room.dm_with ?? 'DM') : room?.is_group ? room.name : `#${room?.name || roomId}`;
 
   return (
     <div className="xp-window" style={{ flex: 1, margin: 0, borderRadius: 0, border: 'none', borderLeft: '1px solid #808080' }}>
@@ -125,8 +180,33 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
           }}
         >←</button>
         <span className="xp-titlebar-text">
-          {room?.is_dm ? (room.dm_with ?? 'DM') : room?.is_group ? room.name : `#${room?.name || roomId}`}
+          {title}
+          {room?.is_group && groupMembers.length > 0 && (
+            <span style={{ fontWeight: 'normal', fontSize: 10, opacity: 0.75, marginLeft: 6 }}>
+              ({groupMembers.length})
+            </span>
+          )}
         </span>
+        {isPrivate && (
+          <div style={{ display: 'flex', gap: 3, marginRight: 4 }}>
+            {room?.is_group && (
+              <button
+                className="xp-btn"
+                style={{ fontSize: 10, padding: '1px 6px' }}
+                onClick={invitePickerOpen ? () => setInvitePickerOpen(false) : openInvitePicker}
+              >
+                + Invite
+              </button>
+            )}
+            <button
+              className="xp-btn"
+              style={{ fontSize: 10, padding: '1px 6px' }}
+              onClick={() => onLeaveRoom(roomId)}
+            >
+              Leave
+            </button>
+          </div>
+        )}
         <div className="xp-controls">
           <button className="xp-btn">─</button>
           <button className="xp-btn">□</button>
@@ -137,6 +217,38 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
           }}>✕</button>
         </div>
       </div>
+
+      {invitePickerOpen && (
+        <div style={{
+          background: '#d4d0c8', borderBottom: '1px solid #808080',
+          padding: '4px 8px', display: 'flex', flexDirection: 'column', gap: 4,
+        }}>
+          <div style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#333', fontWeight: 'bold' }}>Invite to group</div>
+          {loadingInvite ? (
+            <div style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#666' }}>Loading…</div>
+          ) : inviteUsers.length === 0 ? (
+            <div style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#666' }}>No users to invite</div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {inviteUsers.map((u) => (
+                <button
+                  key={u.id}
+                  className="xp-button"
+                  style={{ fontSize: 10, padding: '1px 6px', display: 'flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => handleInvite(u.id)}
+                >
+                  {u.image_url
+                    ? <img src={u.image_url} style={{ width: 12, height: 12, borderRadius: '50%', objectFit: 'cover' }} />
+                    : '👤'
+                  }
+                  {u.username}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="xp-body">
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {messages.map((msg, i) => {
@@ -150,6 +262,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
                   prevMsg={messages[i - 1]}
                   currentUserId={currentUserId}
                   onReact={(msgId, emoji) => handleReact(msgId, emoji)}
+                  onDelete={msg.user_id === currentUserId ? () => onDeleteMessage(roomId, msg.id) : undefined}
                 />
                 {seenBy.length > 0 && (
                   <div style={{ padding: '0 8px 4px', fontFamily: 'Tahoma', fontSize: 10, color: '#999', fontStyle: 'italic' }}>

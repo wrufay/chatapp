@@ -30,9 +30,13 @@ export default function App() {
   const activeRoomId = useStore((s) => s.activeRoomId);
   const setActiveRoom = useStore((s) => s.setActiveRoom);
   const addMessage = useStore((s) => s.addMessage);
+  const removeMessage = useStore((s) => s.removeMessage);
+  const removeRoom = useStore((s) => s.removeRoom);
   const setTypingUsers = useStore((s) => s.setTypingUsers);
   const updateReaction = useStore((s) => s.updateReaction);
   const setReadReceipts = useStore((s) => s.setReadReceipts);
+  const incrementUnread = useStore((s) => s.incrementUnread);
+  const clearUnread = useStore((s) => s.clearUnread);
 
   useEffect(() => {
     if (!isSignedIn || !user) return;
@@ -44,7 +48,14 @@ export default function App() {
 
       socket.on('new_message', (msg: Message) => {
         addMessage(msg);
-        if (msg.user_id !== user!.id) playNotification();
+        if (msg.user_id !== user!.id) {
+          playNotification();
+          if (useStore.getState().activeRoomId !== msg.room_id) incrementUnread(msg.room_id);
+        }
+      });
+
+      socket.on('message_deleted', ({ roomId, messageId }: { roomId: string; messageId: string }) => {
+        removeMessage(roomId, messageId);
       });
       socket.on('typing_update', ({ roomId, users }: { roomId: string; users: string[] }) =>
         setTypingUsers(roomId, users)
@@ -68,6 +79,10 @@ export default function App() {
         const me = user!.id;
         if (!members.some((m) => m.id === me)) return;
         addRoom({ id: roomId, name, is_dm: false, is_group: true });
+      });
+
+      socket.on('group_invited', ({ room, userId }: { room: Room; userId: string }) => {
+        if (userId === user!.id) addRoom(room);
       });
 
       // If the server restarts, socket.io room state is wiped. Rejoin the active room on reconnect.
@@ -94,6 +109,27 @@ export default function App() {
       socket.emit('join_room', id);
     }
     setActiveRoom(id);
+    clearUnread(id);
+  }
+
+  async function handleLeaveRoom(roomId: string) {
+    const token = await getToken();
+    await fetch(`${API}/rooms/${roomId}/membership`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const socket = getSocket();
+    if (socket) socket.emit('leave_room', roomId);
+    removeRoom(roomId);
+    setActiveRoom(null);
+  }
+
+  async function handleDeleteMessage(roomId: string, msgId: string) {
+    const token = await getToken();
+    await fetch(`${API}/rooms/${roomId}/messages/${msgId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
   }
 
   async function handleCreateRoom(name: string) {
@@ -202,6 +238,8 @@ export default function App() {
               currentUserId={user.id}
               currentUsername={username}
               getToken={getToken}
+              onDeleteMessage={handleDeleteMessage}
+              onLeaveRoom={handleLeaveRoom}
             />
           </div>
         </div>
