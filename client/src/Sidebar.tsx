@@ -59,7 +59,7 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      setUsers(Array.isArray(data) ? data : []);
+      setUsers(Array.isArray(data) ? data.filter((u: User) => u.id !== currentUserId) : []);
     } finally {
       setLoadingUsers(false);
     }
