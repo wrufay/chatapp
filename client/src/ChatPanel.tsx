@@ -304,7 +304,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
             {room?.is_group && (
               <button
                 className="xp-btn"
-                style={{ fontSize: 10, padding: '1px 6px' }}
+                style={{ width: 'auto', fontSize: 10, padding: '1px 6px' }}
                 onClick={invitePickerOpen ? () => setInvitePickerOpen(false) : openInvitePicker}
               >
                 + Invite
@@ -312,7 +312,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
             )}
             <button
               className="xp-btn"
-              style={{ fontSize: 10, padding: '1px 6px' }}
+              style={{ width: 'auto', fontSize: 10, padding: '1px 6px' }}
               onClick={() => onLeaveRoom(roomId)}
             >
               Leave

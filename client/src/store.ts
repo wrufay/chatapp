@@ -52,7 +52,7 @@ export const useStore = create<StoreState>()((set) => ({
     set((s) => ({
       messages: {
         ...s.messages,
-        [roomId]: (s.messages[roomId] ?? []).filter((m) => m.id !== messageId),
+        [roomId]: (s.messages[roomId] ?? []).filter((m) => String(m.id) !== String(messageId)),
       },
     })),
 
