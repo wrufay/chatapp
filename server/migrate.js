@@ -36,6 +36,10 @@ async function migrate() {
       PRIMARY KEY (room_id, user_id)
     );
   `);
+  await pool.query(`
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES messages(id);
+    ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT;
+  `);
   console.log('Migration complete');
   await pool.end();
 }

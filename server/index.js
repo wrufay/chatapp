@@ -1,11 +1,28 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const { clerkMiddleware, getAuth } = require('@clerk/express');
+const multer = require('multer');
 const pool = require('./db');
 const redis = require('./redis');
+
+const storage = multer.diskStorage({
+  destination: path.join(__dirname, 'uploads'),
+  filename: (_, file, cb) => {
+    const ext = path.extname(file.originalname) || '.jpg';
+    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+  },
+});
+const upload = multer({
+  storage,
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (_, file, cb) => {
+    cb(null, file.mimetype.startsWith('image/'));
+  },
+});
 
 const app = express();
 const server = http.createServer(app);
@@ -17,6 +34,7 @@ app.set('etag', false);
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 app.use(clerkMiddleware());
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 function requireAuth(req, res, next) {
   const { userId } = getAuth(req);
@@ -33,6 +51,13 @@ async function upsertUser(userId, username, imageUrl) {
     [userId, username, imageUrl]
   );
 }
+
+// REST: POST /upload
+app.post('/upload', requireAuth, upload.single('image'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No image' });
+  const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+  res.json({ url });
+});
 
 // REST: GET /rooms — public rooms + DMs where the user is a member
 app.get('/rooms', requireAuth, async (req, res) => {
