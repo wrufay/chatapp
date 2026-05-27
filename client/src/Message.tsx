@@ -49,7 +49,9 @@ export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete
   const EMOJI_RE = /\p{Extended_Pictographic}[️⃣]?(?:‍\p{Extended_Pictographic}[️⃣]?)*/gu;
   const emojiOnly = (() => {
     if (!msg.content || msg.image_url) return false;
-    const stripped = msg.content.replace(EMOJI_RE, '').replace(/[️︎‍⃣\s]/g, '');
+    const stripped = msg.content
+      .replace(EMOJI_RE, '')
+      .replace(/[️︎‍⃣​﻿\s]/g, '');
     return stripped.length === 0;
   })();
   const emojiCount = emojiOnly ? (msg.content.match(EMOJI_RE) ?? []).length : 0;

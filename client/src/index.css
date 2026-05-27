@@ -138,7 +138,7 @@ body {
 .message-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; user-select: none; position: relative; z-index: 2; }
 .message-reactions *::selection { background: transparent; }
 .reaction-picker *::selection { background: transparent; }
-.emoji-only-content { contain: paint; }
+.emoji-only-content { overflow: visible; }
 .emoji-only-content::selection, .emoji-only-content *::selection { background: rgba(0, 120, 215, 0.25); }
 .reaction-pill {
   background: #e8e8e8; border: 1px solid #ccc; border-radius: 10px;

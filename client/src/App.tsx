@@ -126,10 +126,14 @@ export default function App() {
 
   async function handleDeleteMessage(roomId: string, msgId: string) {
     const token = await getToken();
-    await fetch(`${API}/rooms/${roomId}/messages/${msgId}`, {
+    const res = await fetch(`${API}/rooms/${roomId}/messages/${msgId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.error('[delete message failed]', res.status, err);
+    }
   }
 
   async function handleCreateRoom(name: string) {
