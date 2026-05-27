@@ -242,9 +242,14 @@ app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
     if (!member.rows.length) return res.status(403).json({ error: 'Forbidden' });
   }
   const result = await pool.query(
-    `SELECT * FROM (
+    `SELECT m.*,
+       p.username AS reply_to_username,
+       p.content  AS reply_to_content
+     FROM (
        SELECT * FROM messages WHERE room_id = $1 ORDER BY created_at DESC LIMIT 200
-     ) sub ORDER BY created_at ASC`,
+     ) m
+     LEFT JOIN messages p ON p.id = m.reply_to_id
+     ORDER BY m.created_at ASC`,
     [req.params.id]
   );
   res.json(result.rows);
@@ -386,9 +391,9 @@ io.on('connection', (socket) => {
     io.to(`room:${roomId}`).emit('typing_update', await getTypingUsers(roomId));
   }));
 
-  socket.on('send_message', async ({ roomId, content }, ack) => {
+  socket.on('send_message', async ({ roomId, content, imageUrl, replyToId }, ack) => {
     try {
-      if (!content || !content.trim()) return;
+      if (!content?.trim() && !imageUrl) return;
       const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [roomId]);
       if (!roomRow.rows.length) return ack?.({ error: 'Room not found' });
       if (roomRow.rows[0].is_dm || roomRow.rows[0].is_group) {
@@ -398,11 +403,19 @@ io.on('connection', (socket) => {
         );
         if (!member.rows.length) return ack?.({ error: 'Not a member' });
       }
-      const result = await pool.query(
-        'INSERT INTO messages (room_id, user_id, username, content) VALUES ($1, $2, $3, $4) RETURNING *',
-        [roomId, socket.userId, socket.username, content.trim()]
+      const inserted = await pool.query(
+        'INSERT INTO messages (room_id, user_id, username, content, image_url, reply_to_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [roomId, socket.userId, socket.username, content?.trim() ?? '', imageUrl ?? null, replyToId ?? null]
       );
-      io.to(`room:${roomId}`).emit('new_message', result.rows[0]);
+      const msg = inserted.rows[0];
+      if (msg.reply_to_id) {
+        const parent = await pool.query('SELECT username, content FROM messages WHERE id = $1', [msg.reply_to_id]);
+        if (parent.rows.length) {
+          msg.reply_to_username = parent.rows[0].username;
+          msg.reply_to_content = parent.rows[0].content;
+        }
+      }
+      io.to(`room:${roomId}`).emit('new_message', msg);
       ack?.({ ok: true });
     } catch (err) {
       console.error('[send_message] error:', err.message);

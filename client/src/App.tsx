@@ -94,8 +94,8 @@ export default function App() {
       const res = await fetch(`${API}/rooms`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      const rooms: Room[] = await res.json();
-      setRooms(rooms);
+      const rooms = await res.json();
+      if (Array.isArray(rooms)) setRooms(rooms);
     }
 
     init();
