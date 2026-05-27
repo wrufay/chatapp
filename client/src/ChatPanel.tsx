@@ -364,7 +364,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
       <div className="xp-body">
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {messages.map((msg, i) => {
-            const seenBy = Object.entries(readReceipts)
+            const seenBy = msg.user_id !== currentUserId ? [] : Object.entries(readReceipts)
               .filter(([uid, r]) => r.messageId === msg.id && uid !== currentUserId)
               .map(([, r]) => r.username);
             return (
