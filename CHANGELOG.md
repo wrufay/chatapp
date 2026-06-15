@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-06-15] Add ProfileModal component
+- What changed: Created client/src/ProfileModal.tsx — an XP-styled modal that fetches the current user's profile (avatar, username, bio, status) via GET /api/me and allows editing bio and status via PATCH /api/me. Wired into App.tsx with a "My Profile" button in the Start menu taskbar.
+- Files changed: client/src/ProfileModal.tsx, client/src/App.tsx, TODO.md
+- Note: No migration required; uses existing bio and status columns
+
 ## [2026-06-15] Add GET /api/me and PATCH /api/me profile routes
 - What changed: Added two REST routes to server/index.js — GET /api/me returns the current user's id, username, image_url, bio, and status; PATCH /api/me allows partial updates to bio and/or status
 - Files changed: server/index.js, TODO.md

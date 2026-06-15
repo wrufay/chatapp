@@ -5,6 +5,7 @@ import { connectSocket, getSocket } from './socket';
 import Sidebar from './Sidebar';
 import ChatPanel from './ChatPanel';
 import Clock from './Clock';
+import ProfileModal from './ProfileModal';
 import { playNotification } from './notification';
 import { dog, i9, i17 } from './assets/images';
 import type { Message, ReadReceipt, Room } from './types';
@@ -25,6 +26,7 @@ export default function App() {
   const { getToken } = useAuth();
   const { signOut } = useClerk();
   const [startOpen, setStartOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const setRooms = useStore((s) => s.setRooms);
   const addRoom = useStore((s) => s.addRoom);
   const activeRoomId = useStore((s) => s.activeRoomId);
@@ -259,6 +261,16 @@ export default function App() {
             {username}
           </div>
           <div style={{ padding: 4 }}>
+            <button onClick={() => { setProfileOpen(true); setStartOpen(false); }} style={{
+              width: '100%', textAlign: 'left', padding: '4px 8px',
+              fontFamily: 'Tahoma', fontSize: 11, background: 'none',
+              border: 'none', cursor: 'url(\'/14.png\') 0 0, pointer', display: 'flex', alignItems: 'center', gap: 8,
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#0a246a'; e.currentTarget.style.color = 'white'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = ''; }}>
+              <span style={{ fontSize: 16 }}>👤</span>
+              My Profile
+            </button>
             <button onClick={() => signOut()} style={{
               width: '100%', textAlign: 'left', padding: '4px 8px',
               fontFamily: 'Tahoma', fontSize: 11, background: 'none',
@@ -277,6 +289,7 @@ export default function App() {
         <TaskbarRoomTab />
         <Clock />
       </div>
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} getToken={getToken} />}
     </div>
   );
 }
