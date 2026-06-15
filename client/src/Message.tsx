@@ -26,9 +26,10 @@ interface Props {
   doubleTapEmoji: string;
   onChangeDoubleTap: (emoji: string) => void;
   isOnline?: boolean;
+  onUsernameClick?: (userId: string) => void;
 }
 
-export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete, onReply, doubleTapEmoji, onChangeDoubleTap, isOnline }: Props) {
+export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete, onReply, doubleTapEmoji, onChangeDoubleTap, isOnline, onUsernameClick }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [changingDoubleTap, setChangingDoubleTap] = useState(false);
@@ -109,7 +110,11 @@ export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete
 
       {showMeta && (
         <div className="message-meta">
-          <span className="message-username" style={{ color: accentColor, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span
+            className="message-username"
+            style={{ color: accentColor, display: 'inline-flex', alignItems: 'center', gap: 4, cursor: onUsernameClick ? 'pointer' : undefined }}
+            onClick={onUsernameClick ? () => onUsernameClick(msg.user_id) : undefined}
+          >
             {msg.username}
             {isOnline && (
               <span style={{

@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-06-15] Wire up profile modal to open when clicking a username in the message list
+- What changed: Added optional `userId` prop to ProfileModal — when set, fetches `/api/users/:userId` and shows a read-only view (no edit button) with the user's username as the title; added `onUsernameClick` prop to Message.tsx that makes the username span clickable; ChatPanel.tsx tracks `viewingUserId` state and renders ProfileModal with the clicked user's ID
+- Files changed: client/src/ProfileModal.tsx, client/src/Message.tsx, client/src/ChatPanel.tsx, TODO.md
+- Note: No migration required
+
 ## [2026-06-15] Add online indicator dot to usernames in sidebar and message list
 - What changed: Added `presenceByRoom` state to the Zustand store; wired up `presence` socket events in App.tsx; added a small green dot overlay on DM avatars in Sidebar.tsx when the partner is online; added `isOnline` prop to Message.tsx showing a green dot next to the username; ChatPanel.tsx computes `onlineUserIds` from all presence data and passes it to each Message. Also added `dm_with_id` to the `/rooms` and `/dms` server queries so DM partner IDs are available for presence lookup.
 - Files changed: client/src/types.ts, client/src/store.ts, client/src/App.tsx, client/src/Sidebar.tsx, client/src/Message.tsx, client/src/ChatPanel.tsx, server/index.js, TODO.md

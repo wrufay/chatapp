@@ -13,19 +13,22 @@ interface Profile {
 interface Props {
   onClose: () => void;
   getToken: () => Promise<string | null>;
+  userId?: string;
 }
 
-export default function ProfileModal({ onClose, getToken }: Props) {
+export default function ProfileModal({ onClose, getToken, userId }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editing, setEditing] = useState(false);
   const [bio, setBio] = useState('');
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
+  const readOnly = !!userId;
 
   useEffect(() => {
     async function load() {
       const token = await getToken();
-      const res = await fetch(`${API}/api/me`, {
+      const url = userId ? `${API}/api/users/${userId}` : `${API}/api/me`;
+      const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -36,7 +39,7 @@ export default function ProfileModal({ onClose, getToken }: Props) {
       }
     }
     load();
-  }, []);
+  }, [userId]);
 
   async function handleSave() {
     setSaving(true);
@@ -74,7 +77,7 @@ export default function ProfileModal({ onClose, getToken }: Props) {
     >
       <div className="xp-window" style={{ width: 320 }} onClick={(e) => e.stopPropagation()}>
         <div className="xp-titlebar">
-          <span className="xp-titlebar-text">My Profile</span>
+          <span className="xp-titlebar-text">{readOnly && profile ? `${profile.username}'s Profile` : 'My Profile'}</span>
           <div className="xp-controls">
             <button className="xp-btn close" onClick={onClose}>✕</button>
           </div>
@@ -160,9 +163,11 @@ export default function ProfileModal({ onClose, getToken }: Props) {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <button className="xp-button" onClick={() => setEditing(true)}>Edit Profile</button>
-                  </div>
+                  {!readOnly && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                      <button className="xp-button" onClick={() => setEditing(true)}>Edit Profile</button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

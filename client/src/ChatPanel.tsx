@@ -4,6 +4,7 @@ import data from '@emoji-mart/data';
 import { useStore } from './store';
 import { getSocket } from './socket';
 import Message from './Message';
+import ProfileModal from './ProfileModal';
 import { i6 } from './assets/images';
 import type { User } from './types';
 import type { Message as MessageType } from './types';
@@ -33,6 +34,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   const [sending, setSending] = useState(false);
   const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const [doubleTapEmoji, setDoubleTapEmoji] = useState(() => localStorage.getItem('doubleTapEmoji') ?? '❤️');
+  const [viewingUserId, setViewingUserId] = useState<string | null>(null);
 
   function handleChangeDoubleTap(emoji: string) {
     setDoubleTapEmoji(emoji);
@@ -381,6 +383,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
                   doubleTapEmoji={doubleTapEmoji}
                   onChangeDoubleTap={handleChangeDoubleTap}
                   isOnline={onlineUserIds.has(msg.user_id)}
+                  onUsernameClick={setViewingUserId}
                 />
                 {seenBy.length > 0 && (
                   <div style={{ padding: '0 8px 4px', fontFamily: 'Tahoma', fontSize: 10, color: '#999', fontStyle: 'italic' }}>
@@ -472,6 +475,13 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
           </div>
         </div>
       </div>
+      {viewingUserId && (
+        <ProfileModal
+          userId={viewingUserId}
+          onClose={() => setViewingUserId(null)}
+          getToken={getToken}
+        />
+      )}
     </div>
   );
 }
