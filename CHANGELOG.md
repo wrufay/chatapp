@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-06-15] Add GET /api/users/:id public profile route
+- What changed: Added `GET /api/users/:id` to server/index.js — returns id, username, image_url, bio, and status for any user by their Clerk user ID; requires auth
+- Files changed: server/index.js, TODO.md
+- Note: No migration required
+
 ## [2026-06-15] Add ProfileModal component
 - What changed: Created client/src/ProfileModal.tsx — an XP-styled modal that fetches the current user's profile (avatar, username, bio, status) via GET /api/me and allows editing bio and status via PATCH /api/me. Wired into App.tsx with a "My Profile" button in the Start menu taskbar.
 - Files changed: client/src/ProfileModal.tsx, client/src/App.tsx, TODO.md

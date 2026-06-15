@@ -117,6 +117,16 @@ app.patch('/api/me', requireAuth, async (req, res) => {
   res.json(result.rows[0]);
 });
 
+// REST: GET /api/users/:id — fetch another user's public profile
+app.get('/api/users/:id', requireAuth, async (req, res) => {
+  const result = await pool.query(
+    'SELECT id, username, image_url, bio, status FROM users WHERE id = $1',
+    [req.params.id]
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
+  res.json(result.rows[0]);
+});
+
 // REST: POST /dms — create or retrieve a DM room between two users
 app.post('/dms', requireAuth, async (req, res) => {
   const { targetUserId } = req.body;
