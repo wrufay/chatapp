@@ -88,6 +88,35 @@ app.get('/users', requireAuth, async (req, res) => {
   res.json(result.rows);
 });
 
+// REST: GET /api/me — get current user's profile
+app.get('/api/me', requireAuth, async (req, res) => {
+  const result = await pool.query(
+    'SELECT id, username, image_url, bio, status FROM users WHERE id = $1',
+    [req.userId]
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
+  res.json(result.rows[0]);
+});
+
+// REST: PATCH /api/me — update bio and/or status
+app.patch('/api/me', requireAuth, async (req, res) => {
+  const bio = 'bio' in req.body ? (req.body.bio?.trim() || null) : undefined;
+  const status = 'status' in req.body ? (req.body.status?.trim() || null) : undefined;
+  const updates = [];
+  const values = [];
+  let i = 1;
+  if (bio !== undefined) { updates.push(`bio = $${i++}`); values.push(bio); }
+  if (status !== undefined) { updates.push(`status = $${i++}`); values.push(status); }
+  if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
+  values.push(req.userId);
+  const result = await pool.query(
+    `UPDATE users SET ${updates.join(', ')} WHERE id = $${i} RETURNING id, username, image_url, bio, status`,
+    values
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
+  res.json(result.rows[0]);
+});
+
 // REST: POST /dms — create or retrieve a DM room between two users
 app.post('/dms', requireAuth, async (req, res) => {
   const { targetUserId } = req.body;
