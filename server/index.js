@@ -70,7 +70,11 @@ app.get('/rooms', requireAuth, async (req, res) => {
       (CASE WHEN r.is_dm THEN (
         SELECT u.image_url FROM room_members rm JOIN users u ON u.id = rm.user_id
         WHERE rm.room_id = r.id AND rm.user_id != $1 LIMIT 1
-      ) END) AS dm_with_image
+      ) END) AS dm_with_image,
+      (CASE WHEN r.is_dm THEN (
+        SELECT u.id FROM room_members rm JOIN users u ON u.id = rm.user_id
+        WHERE rm.room_id = r.id AND rm.user_id != $1 LIMIT 1
+      ) END) AS dm_with_id
     FROM rooms r
     WHERE (r.is_dm = false AND r.is_group = false)
        OR EXISTS (SELECT 1 FROM room_members rm WHERE rm.room_id = r.id AND rm.user_id = $1)
@@ -184,7 +188,7 @@ app.post('/dms', requireAuth, async (req, res) => {
   // Return full room with dm_with from the requester's perspective
   const room = await pool.query(`
     SELECT r.*,
-      u.username AS dm_with, u.image_url AS dm_with_image
+      u.username AS dm_with, u.image_url AS dm_with_image, u.id AS dm_with_id
     FROM rooms r
     JOIN room_members rm ON rm.room_id = r.id AND rm.user_id != $1
     JOIN users u ON u.id = rm.user_id

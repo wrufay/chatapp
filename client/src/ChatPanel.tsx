@@ -23,6 +23,8 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   const messages = useStore((s) => (roomId ? s.messages[roomId] : undefined)) ?? [];
   const typingUsers = useStore((s) => (roomId ? s.typingUsers[roomId] : undefined)) ?? [];
   const readReceipts = useStore((s) => (roomId ? s.readReceipts[roomId] : undefined)) ?? {};
+  const presenceByRoom = useStore((s) => s.presenceByRoom);
+  const onlineUserIds = new Set(Object.values(presenceByRoom).flat());
   const setMessages = useStore((s) => s.setMessages);
   const setActiveRoom = useStore((s) => s.setActiveRoom);
   const [input, setInput] = useState('');
@@ -378,6 +380,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
                   onReply={handleReply}
                   doubleTapEmoji={doubleTapEmoji}
                   onChangeDoubleTap={handleChangeDoubleTap}
+                  isOnline={onlineUserIds.has(msg.user_id)}
                 />
                 {seenBy.length > 0 && (
                   <div style={{ padding: '0 8px 4px', fontFamily: 'Tahoma', fontSize: 10, color: '#999', fontStyle: 'italic' }}>

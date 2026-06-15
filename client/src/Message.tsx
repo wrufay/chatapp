@@ -25,9 +25,10 @@ interface Props {
   onReply: (msg: MessageType) => void;
   doubleTapEmoji: string;
   onChangeDoubleTap: (emoji: string) => void;
+  isOnline?: boolean;
 }
 
-export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete, onReply, doubleTapEmoji, onChangeDoubleTap }: Props) {
+export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete, onReply, doubleTapEmoji, onChangeDoubleTap, isOnline }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [changingDoubleTap, setChangingDoubleTap] = useState(false);
@@ -108,7 +109,16 @@ export default function Message({ msg, prevMsg, currentUserId, onReact, onDelete
 
       {showMeta && (
         <div className="message-meta">
-          <span className="message-username" style={{ color: accentColor }}>{msg.username}</span>
+          <span className="message-username" style={{ color: accentColor, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            {msg.username}
+            {isOnline && (
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%',
+                background: '#44cc44', border: '1px solid #888',
+                display: 'inline-block', flexShrink: 0,
+              }} />
+            )}
+          </span>
           <span className="message-time">{time}</span>
         </div>
       )}

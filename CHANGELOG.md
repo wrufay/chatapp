@@ -1,5 +1,10 @@
 # Changelog
 
+## [2026-06-15] Add online indicator dot to usernames in sidebar and message list
+- What changed: Added `presenceByRoom` state to the Zustand store; wired up `presence` socket events in App.tsx; added a small green dot overlay on DM avatars in Sidebar.tsx when the partner is online; added `isOnline` prop to Message.tsx showing a green dot next to the username; ChatPanel.tsx computes `onlineUserIds` from all presence data and passes it to each Message. Also added `dm_with_id` to the `/rooms` and `/dms` server queries so DM partner IDs are available for presence lookup.
+- Files changed: client/src/types.ts, client/src/store.ts, client/src/App.tsx, client/src/Sidebar.tsx, client/src/Message.tsx, client/src/ChatPanel.tsx, server/index.js, TODO.md
+- Note: No migration required
+
 ## [2026-06-15] Add GET /api/users/:id public profile route
 - What changed: Added `GET /api/users/:id` to server/index.js — returns id, username, image_url, bio, and status for any user by their Clerk user ID; requires auth
 - Files changed: server/index.js, TODO.md

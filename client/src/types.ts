@@ -5,6 +5,7 @@ export interface Room {
   is_group: boolean;
   dm_with?: string;
   dm_with_image?: string;
+  dm_with_id?: string;
 }
 
 export interface User {

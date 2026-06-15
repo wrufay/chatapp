@@ -8,6 +8,7 @@ interface StoreState {
   typingUsers: Record<string, string[]>;
   readReceipts: Record<string, Record<string, ReadReceipt>>;
   unreadCounts: Record<string, number>;
+  presenceByRoom: Record<string, string[]>;
 
   setRooms: (rooms: Room[]) => void;
   addRoom: (room: Room) => void;
@@ -21,6 +22,7 @@ interface StoreState {
   setReadReceipts: (roomId: string, reads: Record<string, ReadReceipt>) => void;
   incrementUnread: (roomId: string) => void;
   clearUnread: (roomId: string) => void;
+  setPresence: (roomId: string, members: string[]) => void;
 }
 
 export const useStore = create<StoreState>()((set) => ({
@@ -30,6 +32,7 @@ export const useStore = create<StoreState>()((set) => ({
   typingUsers: {},
   readReceipts: {},
   unreadCounts: {},
+  presenceByRoom: {},
 
   setRooms: (rooms) => set({ rooms }),
   addRoom: (room) => set((s) =>
@@ -75,4 +78,7 @@ export const useStore = create<StoreState>()((set) => ({
 
   clearUnread: (roomId) =>
     set((s) => ({ unreadCounts: { ...s.unreadCounts, [roomId]: 0 } })),
+
+  setPresence: (roomId, members) =>
+    set((s) => ({ presenceByRoom: { ...s.presenceByRoom, [roomId]: members } })),
 }));

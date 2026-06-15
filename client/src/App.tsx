@@ -39,6 +39,7 @@ export default function App() {
   const setReadReceipts = useStore((s) => s.setReadReceipts);
   const incrementUnread = useStore((s) => s.incrementUnread);
   const clearUnread = useStore((s) => s.clearUnread);
+  const setPresence = useStore((s) => s.setPresence);
 
   useEffect(() => {
     if (!isSignedIn || !user) return;
@@ -69,12 +70,15 @@ export default function App() {
       socket.on('read_update', ({ roomId, reads }: { roomId: string; reads: Record<string, ReadReceipt> }) =>
         setReadReceipts(roomId, reads)
       );
+      socket.on('presence', ({ roomId, members }: { roomId: string; members: string[] }) =>
+        setPresence(roomId, members)
+      );
 
       socket.on('dm_created', ({ roomId, members }: { roomId: string; members: { id: string; username: string; image_url: string }[] }) => {
         const me = user!.id;
         if (!members.some((m) => m.id === me)) return;
         const other = members.find((m) => m.id !== me)!;
-        addRoom({ id: roomId, name: '', is_dm: true, is_group: false, dm_with: other.username, dm_with_image: other.image_url });
+        addRoom({ id: roomId, name: '', is_dm: true, is_group: false, dm_with: other.username, dm_with_image: other.image_url, dm_with_id: other.id });
       });
 
       socket.on('group_created', ({ roomId, name, members }: { roomId: string; name: string; members: { id: string }[] }) => {

@@ -30,6 +30,8 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
   const rooms = useStore((s) => s.rooms);
   const activeRoomId = useStore((s) => s.activeRoomId);
   const unreadCounts = useStore((s) => s.unreadCounts);
+  const presenceByRoom = useStore((s) => s.presenceByRoom);
+  const onlineUserIds = new Set(Object.values(presenceByRoom).flat());
   const [newRoomName, setNewRoomName] = useState('');
   const [creating, setCreating] = useState(false);
   const [dmPickerOpen, setDmPickerOpen] = useState(false);
@@ -218,11 +220,21 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
             className={`room-item${activeRoomId === room.id ? ' active' : ''}`}
             onClick={() => onSelectRoom(room.id)}
           >
-            {room.dm_with_image ? (
-              <img src={room.dm_with_image} style={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
-            ) : (
-              <span style={{ fontSize: 11 }}>👤</span>
-            )}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              {room.dm_with_image ? (
+                <img src={room.dm_with_image} style={{ width: 14, height: 14, borderRadius: '50%', display: 'block', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: 11 }}>👤</span>
+              )}
+              {room.dm_with_id && onlineUserIds.has(room.dm_with_id) && (
+                <span style={{
+                  position: 'absolute', bottom: -1, right: -2,
+                  width: 6, height: 6, borderRadius: '50%',
+                  background: '#44cc44', border: '1px solid #888',
+                  display: 'block',
+                }} />
+              )}
+            </div>
             <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{room.dm_with || room.name}</span>
             {(unreadCounts[room.id] ?? 0) > 0 && <UnreadBadge count={unreadCounts[room.id]} />}
           </div>
