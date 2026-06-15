@@ -40,6 +40,10 @@ async function migrate() {
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to_id INTEGER REFERENCES messages(id);
     ALTER TABLE messages ADD COLUMN IF NOT EXISTS image_url TEXT;
   `);
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT;
+  `);
   console.log('Migration complete');
   await pool.end();
 }
