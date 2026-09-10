@@ -173,3 +173,7 @@ reactions are stored as `{ "👍": ["userId1", "userId2"], "❤️": ["userId1"]
 - after deploying, run `node migrate.js` once from the railway shell
 - update `CLIENT_URL` on railway to match the vercel url (no trailing slash)
 - update `VITE_SERVER_URL` on vercel to match the railway url (no trailing slash)
+- for demo/portfolio deploys, prefer neon (postgres) + upstash (redis) over railway's postgres/redis
+  plugins to avoid uptime billing — see "hosting: neon (postgres) + upstash (redis)" in README.md.
+  `DATABASE_URL`/`REDIS_URL` are the same env vars either way, so this doesn't change how the
+  backend service itself is configured on railway (or wherever it runs).

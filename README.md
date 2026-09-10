@@ -5,8 +5,8 @@ a real-time chat app with a windows xp aesthetic. react + vite on the frontend, 
 ## what you need
 
 - node 18+
-- postgres running locally (or a connection string)
-- redis running locally (`redis-server`)
+- postgres running locally, or a connection string (recommended for deploys: [neon](https://neon.tech) - free tier, scales to zero when idle)
+- redis running locally (`redis-server`), or a connection string (recommended for deploys: [upstash](https://upstash.com) - free tier, pay-per-request)
 - a [clerk](https://clerk.com) account
 
 ---
@@ -32,6 +32,50 @@ npm run dev       # starts on port 3001
 | `CLERK_SECRET_KEY` | from clerk dashboard → api keys |
 | `CLERK_PUBLISHABLE_KEY` | from clerk dashboard → api keys |
 | `CLIENT_URL` | your frontend url, used for cors (no trailing slash) |
+
+---
+
+## hosting: neon (postgres) + upstash (redis)
+
+Railway bills for uptime even when the app is idle, which is overkill for a
+portfolio-scale demo. Neon and Upstash are usage-based and both have a free
+tier that comfortably covers demo traffic. Neither requires a code change —
+`DATABASE_URL` and `REDIS_URL` work exactly the same way, you're just
+pointing them at a different provider.
+
+**Postgres → Neon**
+
+1. Create a project at [neon.tech](https://neon.tech).
+2. Copy the connection string from the dashboard — prefer the **pooled**
+   one (hostname contains `-pooler`). This app runs a long-lived socket.io
+   process that can hold several concurrent DB queries at once, and Neon's
+   free-tier *direct* connection limit is low; the pooled endpoint (PgBouncer)
+   avoids "too many connections" errors.
+3. Paste it into `server/.env` as `DATABASE_URL`. It already includes
+   `?sslmode=require` — `server/db.js` detects that and enables SSL
+   automatically, so nothing else to change.
+4. Run `npm run migrate` (from `server/`) once, against the new database, to
+   create the tables.
+5. Note: Neon's free tier scales the compute to zero after a period of
+   inactivity. The first query after idling pays a cold-start (~ up to a
+   second or few) before the connection is ready — fine for a demo, just
+   don't expect Railway-like always-warm latency on the first request.
+
+**Redis → Upstash**
+
+1. Create a Redis database at [upstash.com](https://upstash.com).
+2. This app only does plain key/value and set operations (`get`, `set` with
+   `EX`, `sadd`, `smembers`, `srem`, `del`, `keys`) for presence and typing
+   indicators — no pub/sub, no blocking commands. That means Upstash's
+   **TCP endpoint** (ioredis-compatible, `rediss://...`) is a drop-in swap;
+   use that connection string, not the REST URL/token pair.
+3. Paste it into `server/.env` as `REDIS_URL`. `server/redis.js` already
+   works with `rediss://` URLs (ioredis auto-enables TLS for that scheme).
+4. Free-tier plans cap monthly commands and concurrent connections — check
+   Upstash's current limits if you expect more than light demo traffic.
+
+Railway's `DATABASE_URL`/`REDIS_URL` still work unchanged if you don't swap
+them — this is a drop-in provider change, not a required migration.
 
 ---
 
