@@ -4,7 +4,6 @@ const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const { clerkMiddleware, getAuth } = require('@clerk/express');
 const multer = require('multer');
 const pool = require('./db');
 const redis = require('./redis');
@@ -33,23 +32,37 @@ const io = new Server(server, {
 app.set('etag', false);
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
-app.use(clerkMiddleware());
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-function requireAuth(req, res, next) {
-  const { userId } = getAuth(req);
-  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
-  req.userId = userId;
-  next();
+// No accounts: identity is just a client-generated id + secret, both
+// persisted in the browser's localStorage. First request for an id wins and
+// registers the secret; every later request for that id must present the
+// same secret. This isn't real auth (nothing stops someone from reading
+// their own localStorage and impersonating themselves elsewhere), it just
+// stops a stranger from casually hijacking someone else's id.
+async function verifyIdentity(userId, secret, username) {
+  const existing = await pool.query('SELECT secret FROM users WHERE id = $1', [userId]);
+  if (!existing.rows.length) {
+    await pool.query(
+      'INSERT INTO users (id, username, secret) VALUES ($1, $2, $3)',
+      [userId, username || 'anon', secret]
+    );
+    return true;
+  }
+  if (existing.rows[0].secret !== secret) return false;
+  if (username) await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, userId]);
+  return true;
 }
 
-// Upsert user into DB from Clerk session
-async function upsertUser(userId, username, imageUrl) {
-  await pool.query(
-    `INSERT INTO users (id, username, image_url) VALUES ($1, $2, $3)
-     ON CONFLICT (id) DO UPDATE SET username = $2, image_url = $3`,
-    [userId, username, imageUrl]
-  );
+async function requireAuth(req, res, next) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  const [userId, secret] = token.split('.');
+  if (!userId || !secret) return res.status(401).json({ error: 'Unauthorized' });
+  const ok = await verifyIdentity(userId, secret);
+  if (!ok) return res.status(403).json({ error: 'Forbidden' });
+  req.userId = userId;
+  next();
 }
 
 // REST: POST /upload
@@ -370,15 +383,12 @@ app.post('/rooms/:id/messages/:msgId/react', requireAuth, async (req, res) => {
 
 // Socket.io
 io.use(async (socket, next) => {
-  const token = socket.handshake.auth.token;
-  if (!token) return next(new Error('No token'));
-  // We trust the token and extract userId/username from handshake
-  // Actual verification happens via Clerk's session
-  socket.userId = socket.handshake.auth.userId;
-  socket.username = socket.handshake.auth.username;
-  socket.imageUrl = socket.handshake.auth.imageUrl;
-  if (!socket.userId) return next(new Error('No userId'));
-  await upsertUser(socket.userId, socket.username, socket.imageUrl).catch(() => {});
+  const { userId, username, secret } = socket.handshake.auth;
+  if (!userId || !secret) return next(new Error('No identity'));
+  const ok = await verifyIdentity(userId, secret, username).catch(() => false);
+  if (!ok) return next(new Error('Identity mismatch'));
+  socket.userId = userId;
+  socket.username = username;
   next();
 });
 

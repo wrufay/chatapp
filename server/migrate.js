@@ -44,6 +44,9 @@ async function migrate() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT;
   `);
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS secret TEXT;
+  `);
   console.log('Migration complete');
   await pool.end();
 }

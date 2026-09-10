@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useUser, useAuth, SignIn, useClerk } from '@clerk/clerk-react';
+import { getUserId, getSecret, getUsername, setUsername as saveUsername, clearUsername, getToken } from './identity';
 import { useStore } from './store';
 import { connectSocket, getSocket } from './socket';
 import Sidebar from './Sidebar';
@@ -7,7 +7,7 @@ import ChatPanel from './ChatPanel';
 import Clock from './Clock';
 import ProfileModal from './ProfileModal';
 import { playNotification } from './notification';
-import { dog, i9, i17 } from './assets/images';
+import { dog, i9 } from './assets/images';
 import type { Message, ReadReceipt, Room } from './types';
 
 const API = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
@@ -22,9 +22,9 @@ function TaskbarRoomTab() {
 }
 
 export default function App() {
-  const { isSignedIn, user, isLoaded } = useUser();
-  const { getToken } = useAuth();
-  const { signOut } = useClerk();
+  const userId = getUserId();
+  const [username, setUsernameState] = useState<string | null>(() => getUsername());
+  const [nameInput, setNameInput] = useState('');
   const [startOpen, setStartOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const setRooms = useStore((s) => s.setRooms);
@@ -42,16 +42,15 @@ export default function App() {
   const setPresence = useStore((s) => s.setPresence);
 
   useEffect(() => {
-    if (!isSignedIn || !user) return;
+    if (!username) return;
 
     async function init() {
+      const socket = connectSocket(userId, username!, getSecret());
       const token = await getToken();
-      const username = user!.username ?? user!.firstName ?? user!.emailAddresses[0]?.emailAddress ?? '';
-      const socket = connectSocket(user!.id, username, user!.imageUrl ?? '', token ?? '');
 
       socket.on('new_message', (msg: Message) => {
         addMessage(msg);
-        if (msg.user_id !== user!.id) {
+        if (msg.user_id !== userId) {
           playNotification();
           if (useStore.getState().activeRoomId !== msg.room_id) incrementUnread(msg.room_id);
         }
@@ -75,20 +74,18 @@ export default function App() {
       );
 
       socket.on('dm_created', ({ roomId, members }: { roomId: string; members: { id: string; username: string; image_url: string }[] }) => {
-        const me = user!.id;
-        if (!members.some((m) => m.id === me)) return;
-        const other = members.find((m) => m.id !== me)!;
+        if (!members.some((m) => m.id === userId)) return;
+        const other = members.find((m) => m.id !== userId)!;
         addRoom({ id: roomId, name: '', is_dm: true, is_group: false, dm_with: other.username, dm_with_image: other.image_url, dm_with_id: other.id });
       });
 
       socket.on('group_created', ({ roomId, name, members }: { roomId: string; name: string; members: { id: string }[] }) => {
-        const me = user!.id;
-        if (!members.some((m) => m.id === me)) return;
+        if (!members.some((m) => m.id === userId)) return;
         addRoom({ id: roomId, name, is_dm: false, is_group: true });
       });
 
-      socket.on('group_invited', ({ room, userId }: { room: Room; userId: string }) => {
-        if (userId === user!.id) addRoom(room);
+      socket.on('group_invited', ({ room, userId: invitedId }: { room: Room; userId: string }) => {
+        if (invitedId === userId) addRoom(room);
       });
 
       // If the server restarts, socket.io room state is wiped. Rejoin the active room on reconnect.
@@ -105,7 +102,20 @@ export default function App() {
     }
 
     init();
-  }, [isSignedIn, user]);
+  }, [username]);
+
+  function handleJoin(e: React.FormEvent) {
+    e.preventDefault();
+    const name = nameInput.trim();
+    if (!name) return;
+    saveUsername(name);
+    setUsernameState(name);
+  }
+
+  function handleSignOut() {
+    clearUsername();
+    setUsernameState(null);
+  }
 
   async function handleSelectRoom(id: string) {
     const prev = activeRoomId;
@@ -189,19 +199,10 @@ export default function App() {
     handleSelectRoom(room.id);
   }
 
-  if (!isLoaded) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <img src={i17} style={{ width: 48, height: 48, imageRendering: 'pixelated' }} />
-        <span style={{ fontFamily: 'Tahoma', fontSize: 11, color: '#dce1e9', marginTop: 8 }}>Loading…</span>
-      </div>
-    );
-  }
-
-  if (!isSignedIn) {
+  if (!username) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div className="xp-window signin-window" style={{ width: 'fit-content' }}>
+        <div className="xp-window signin-window" style={{ width: 300 }}>
           <div className="xp-titlebar">
             <img src={i9} style={{ width: 14, height: 14, imageRendering: 'pixelated', marginRight: 4 }} />
             <span className="xp-titlebar-text">Sign In — swwd gng</span>
@@ -211,15 +212,29 @@ export default function App() {
               <button className="xp-btn close">✕</button>
             </div>
           </div>
-          <div style={{ background: '#d4d0c8', padding: '4px 4px 0 4px' }}>
-            <SignIn routing="hash" />
-          </div>
+          <form onSubmit={handleJoin} style={{ background: '#d4d0c8', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ fontFamily: 'Tahoma', fontSize: 13, fontWeight: 'bold', color: '#000' }}>
+              pick a name to join
+            </div>
+            <div style={{ fontFamily: 'Tahoma', fontSize: 11, color: '#444' }}>
+              no account, no email — just a nickname. be nice.
+            </div>
+            <input
+              className="xp-input"
+              value={nameInput}
+              onChange={(e) => setNameInput(e.target.value)}
+              placeholder="nickname"
+              maxLength={24}
+              autoFocus
+            />
+            <button type="submit" className="xp-button" disabled={!nameInput.trim()}>
+              Enter chat →
+            </button>
+          </form>
         </div>
       </div>
     );
   }
-
-  const username = user.username ?? user.firstName ?? user.emailAddresses[0]?.emailAddress ?? '';
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -230,7 +245,7 @@ export default function App() {
           <div className="xp-controls">
             <button className="xp-btn">─</button>
             <button className="xp-btn">□</button>
-            <button className="xp-btn close" onClick={() => signOut()}>✕</button>
+            <button className="xp-btn close" onClick={handleSignOut}>✕</button>
           </div>
         </div>
         <div className={`chat-layout${activeRoomId ? ' has-room' : ''}`}>
@@ -240,12 +255,12 @@ export default function App() {
             onStartDM={handleStartDM}
             onCreateGroup={handleCreateGroup}
             getToken={getToken}
-            currentUserId={user.id}
+            currentUserId={userId}
           />
           <div className="chat-area">
             <ChatPanel
               roomId={activeRoomId}
-              currentUserId={user.id}
+              currentUserId={userId}
               currentUsername={username}
               getToken={getToken}
               onDeleteMessage={handleDeleteMessage}
@@ -275,7 +290,7 @@ export default function App() {
               <span style={{ fontSize: 16 }}>👤</span>
               My Profile
             </button>
-            <button onClick={() => signOut()} style={{
+            <button onClick={handleSignOut} style={{
               width: '100%', textAlign: 'left', padding: '4px 8px',
               fontFamily: 'Tahoma', fontSize: 11, background: 'none',
               border: 'none', cursor: 'url(\'/14.png\') 0 0, pointer', display: 'flex', alignItems: 'center', gap: 8,

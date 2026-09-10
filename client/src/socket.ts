@@ -6,10 +6,10 @@ export function getSocket(): Socket | null {
   return socket;
 }
 
-export function connectSocket(userId: string, username: string, imageUrl: string, token: string): Socket {
+export function connectSocket(userId: string, username: string, secret: string): Socket {
   if (socket) socket.disconnect();
   socket = io(import.meta.env.VITE_SERVER_URL || 'http://localhost:3001', {
-    auth: { userId, username, imageUrl, token },
+    auth: { userId, username, secret },
   });
   return socket;
 }

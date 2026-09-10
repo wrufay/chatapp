@@ -1,0 +1,9 @@
+node_modules
+.env
+.env.local
+.DS_Store
+
+# ralph-loop automation scaffolding (kept local, not versioned)
+RALPH.md
+AGENTS.md
+ralph-loop.sh
