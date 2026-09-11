@@ -1,18 +1,21 @@
 require('dotenv').config();
 const express = require('express');
 const http = require('http');
-const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const pool = require('./db');
 const redis = require('./redis');
 
-const storage = multer.diskStorage({
-  destination: path.join(__dirname, 'uploads'),
-  filename: (_, file, cb) => {
-    const ext = path.extname(file.originalname) || '.jpg';
-    cb(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${ext}`);
+// cloudinary reads CLOUDINARY_URL from the environment automatically - no
+// explicit .config() call needed.
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'chatapp',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
   },
 });
 const upload = multer({
@@ -32,7 +35,6 @@ const io = new Server(server, {
 app.set('etag', false);
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // No accounts: identity is just a client-generated id + secret, both
 // persisted in the browser's localStorage. First request for an id wins and
@@ -68,8 +70,7 @@ async function requireAuth(req, res, next) {
 // REST: POST /upload
 app.post('/upload', requireAuth, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No image' });
-  const url = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-  res.json({ url });
+  res.json({ url: req.file.path });
 });
 
 // REST: GET /rooms — public rooms + DMs where the user is a member
