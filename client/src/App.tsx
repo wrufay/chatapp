@@ -127,7 +127,7 @@ export default function App() {
     }
 
     init();
-  }, [activeMode, userId]);
+  }, [clerkLoaded, activeMode, userId]);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
@@ -252,13 +252,13 @@ export default function App() {
           <div style={{ background: '#d4d0c8', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {clerkAvailable && (
               <>
-                {/* Hides the email/password fallback, the "Secured by Clerk" /
-                    dev-mode footer, and the card's own background/shadow/border
-                    via CSS only, so it blends into this one XP pane instead of
-                    floating as its own nested white box. The real fix for the
-                    email fallback is disabling "Email address" as a sign-in
-                    identifier in the Clerk dashboard (User & Authentication >
-                    Email, Phone, Username). Revert by dropping this appearance prop. */}
+                {/* Hides the email/password fallback and the "Secured by Clerk" /
+                    dev-mode footer via CSS only, keeping Clerk's own white card
+                    chrome so the Google option reads as its own clear block
+                    above the guest form. The real fix for the email fallback is
+                    disabling "Email address" as a sign-in identifier in the
+                    Clerk dashboard (User & Authentication > Email, Phone,
+                    Username). Revert by dropping this appearance prop. */}
                 <SignIn
                   routing="hash"
                   appearance={{
@@ -269,8 +269,8 @@ export default function App() {
                       footer: { display: 'none' },
                       headerSubtitle: { display: 'none' },
                       rootBox: { width: '100%' },
-                      cardBox: { width: '100%', boxShadow: 'none', background: 'transparent' },
-                      card: { width: '100%', boxShadow: 'none', background: 'transparent', border: 'none', padding: 0 },
+                      cardBox: { width: '100%' },
+                      card: { width: '100%' },
                     },
                   }}
                 />

@@ -138,43 +138,86 @@ app.get('/users', requireAuth, async (req, res) => {
   res.json(result.rows);
 });
 
+// Keep in sync with the keys of COLOR_SCHEMES in client/src/colorSchemes.ts —
+// there's no shared-types package between client and server in this repo.
+const VALID_COLOR_SCHEMES = new Set(['slate', 'mint', 'sunset', 'ocean', 'rose', 'citrus']);
+
+function sanitizeCustomFields(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .slice(0, 3)
+    .map((f) => ({
+      label: String(f?.label ?? '').trim().slice(0, 30),
+      value: String(f?.value ?? '').trim().slice(0, 60),
+    }))
+    .filter((f) => f.label || f.value);
+}
+
+async function getMessageStats(userId) {
+  const { rows } = await pool.query(
+    `SELECT
+       (SELECT COUNT(*) FROM messages WHERE user_id = $1) AS user_count,
+       (SELECT COUNT(*) FROM messages) AS total_count`,
+    [userId]
+  );
+  const userCount = Number(rows[0].user_count);
+  const totalCount = Number(rows[0].total_count);
+  return {
+    messageCount: userCount,
+    messagePercent: totalCount > 0 ? Math.round((userCount / totalCount) * 1000) / 10 : 0,
+  };
+}
+
 // REST: GET /api/me — get current user's profile
 app.get('/api/me', requireAuth, async (req, res) => {
   const result = await pool.query(
-    'SELECT id, username, image_url, bio, status FROM users WHERE id = $1',
+    'SELECT id, username, image_url, bio, status, color_scheme, custom_fields FROM users WHERE id = $1',
     [req.userId]
   );
   if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
-  res.json(result.rows[0]);
+  const stats = await getMessageStats(req.userId);
+  res.json({ ...result.rows[0], ...stats });
 });
 
-// REST: PATCH /api/me — update bio and/or status
+// REST: PATCH /api/me — update bio, status, color scheme, and/or custom fields
 app.patch('/api/me', requireAuth, async (req, res) => {
   const bio = 'bio' in req.body ? (req.body.bio?.trim() || null) : undefined;
   const status = 'status' in req.body ? (req.body.status?.trim() || null) : undefined;
+  // Unknown scheme keys are silently ignored (no update), not rejected --
+  // only an explicit falsy value actually clears it.
+  let colorScheme;
+  if ('color_scheme' in req.body) {
+    if (!req.body.color_scheme) colorScheme = null;
+    else if (VALID_COLOR_SCHEMES.has(req.body.color_scheme)) colorScheme = req.body.color_scheme;
+  }
+  const customFields = 'custom_fields' in req.body ? sanitizeCustomFields(req.body.custom_fields) : undefined;
   const updates = [];
   const values = [];
   let i = 1;
   if (bio !== undefined) { updates.push(`bio = $${i++}`); values.push(bio); }
   if (status !== undefined) { updates.push(`status = $${i++}`); values.push(status); }
+  if (colorScheme !== undefined) { updates.push(`color_scheme = $${i++}`); values.push(colorScheme); }
+  if (customFields !== undefined) { updates.push(`custom_fields = $${i++}`); values.push(JSON.stringify(customFields)); }
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
   values.push(req.userId);
   const result = await pool.query(
-    `UPDATE users SET ${updates.join(', ')} WHERE id = $${i} RETURNING id, username, image_url, bio, status`,
+    `UPDATE users SET ${updates.join(', ')} WHERE id = $${i} RETURNING id, username, image_url, bio, status, color_scheme, custom_fields`,
     values
   );
   if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
-  res.json(result.rows[0]);
+  const stats = await getMessageStats(req.userId);
+  res.json({ ...result.rows[0], ...stats });
 });
 
 // REST: GET /api/users/:id — fetch another user's public profile
 app.get('/api/users/:id', requireAuth, async (req, res) => {
   const result = await pool.query(
-    'SELECT id, username, image_url, bio, status FROM users WHERE id = $1',
+    'SELECT id, username, image_url, bio, status, color_scheme, custom_fields FROM users WHERE id = $1',
     [req.params.id]
   );
   if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
-  res.json(result.rows[0]);
+  const stats = await getMessageStats(req.params.id);
+  res.json({ ...result.rows[0], ...stats });
 });
 
 // REST: POST /dms — create or retrieve a DM room between two users

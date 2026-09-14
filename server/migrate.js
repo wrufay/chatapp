@@ -47,6 +47,10 @@ async function migrate() {
   await pool.query(`
     ALTER TABLE users ADD COLUMN IF NOT EXISTS secret TEXT;
   `);
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS color_scheme TEXT;
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '[]';
+  `);
   console.log('Migration complete');
   await pool.end();
 }
