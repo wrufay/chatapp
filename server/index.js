@@ -6,8 +6,12 @@ const cors = require('cors');
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
+const { clerkMiddleware, getAuth } = require('@clerk/express');
+const { verifyToken } = require('@clerk/backend');
 const pool = require('./db');
 const redis = require('./redis');
+
+const clerkEnabled = !!(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
 
 // cloudinary reads CLOUDINARY_URL from the environment automatically - no
 // explicit .config() call needed.
@@ -35,6 +39,7 @@ const io = new Server(server, {
 app.set('etag', false);
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
+if (clerkEnabled) app.use(clerkMiddleware());
 
 // No accounts: identity is just a client-generated id + secret, both
 // persisted in the browser's localStorage. First request for an id wins and
@@ -43,22 +48,49 @@ app.use(express.json());
 // their own localStorage and impersonating themselves elsewhere), it just
 // stops a stranger from casually hijacking someone else's id.
 async function verifyIdentity(userId, secret, username) {
-  const existing = await pool.query('SELECT secret FROM users WHERE id = $1', [userId]);
-  if (!existing.rows.length) {
-    await pool.query(
-      'INSERT INTO users (id, username, secret) VALUES ($1, $2, $3)',
-      [userId, username || 'anon', secret]
-    );
-    return true;
-  }
-  if (existing.rows[0].secret !== secret) return false;
+  // Atomic upsert instead of check-then-insert: two first requests for the
+  // same brand-new userId (e.g. the socket handshake and the /rooms fetch
+  // firing close together) used to race and violate the id primary key.
+  // `xmax = 0` is postgres's standard tell for "this row was just inserted
+  // by this statement" vs. "this hit the ON CONFLICT branch".
+  const { rows } = await pool.query(
+    `INSERT INTO users (id, username, secret) VALUES ($1, $2, $3)
+     ON CONFLICT (id) DO UPDATE SET id = users.id
+     RETURNING secret, (xmax = 0) AS inserted`,
+    [userId, username || 'anon', secret]
+  );
+  const row = rows[0];
+  if (row.inserted) return true;
+  if (row.secret !== secret) return false;
   if (username) await pool.query('UPDATE users SET username = $1 WHERE id = $2', [username, userId]);
   return true;
 }
 
+// Clerk accounts (signed in with Google) live in the same `users` table as
+// anonymous ones; `secret` just stays NULL for them since Clerk verifies
+// identity on its own.
+async function upsertClerkUser(userId, username, imageUrl) {
+  await pool.query(
+    `INSERT INTO users (id, username, image_url) VALUES ($1, $2, $3)
+     ON CONFLICT (id) DO UPDATE SET username = $2, image_url = $3`,
+    [userId, username, imageUrl]
+  );
+}
+
+// Anon tokens are `${userId}.${secret}` (2 dot-segments); Clerk session
+// tokens are JWTs (always 3). That's enough to tell the two auth modes
+// apart without a separate flag on the wire.
 async function requireAuth(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'Unauthorized' });
+  if (token.split('.').length === 3) {
+    if (!clerkEnabled) return res.status(401).json({ error: 'Unauthorized' });
+    const { userId } = getAuth(req);
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    req.userId = userId;
+    return next();
+  }
   const [userId, secret] = token.split('.');
   if (!userId || !secret) return res.status(401).json({ error: 'Unauthorized' });
   const ok = await verifyIdentity(userId, secret);
@@ -384,7 +416,21 @@ app.post('/rooms/:id/messages/:msgId/react', requireAuth, async (req, res) => {
 
 // Socket.io
 io.use(async (socket, next) => {
-  const { userId, username, secret } = socket.handshake.auth;
+  const { token, username, imageUrl } = socket.handshake.auth;
+  if (!token) return next(new Error('No identity'));
+  if (token.split('.').length === 3) {
+    if (!clerkEnabled) return next(new Error('Clerk not configured'));
+    try {
+      const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
+      await upsertClerkUser(payload.sub, username, imageUrl).catch(() => {});
+      socket.userId = payload.sub;
+      socket.username = username;
+    } catch {
+      return next(new Error('Identity mismatch'));
+    }
+    return next();
+  }
+  const [userId, secret] = token.split('.');
   if (!userId || !secret) return next(new Error('No identity'));
   const ok = await verifyIdentity(userId, secret, username).catch(() => false);
   if (!ok) return next(new Error('Identity mismatch'));

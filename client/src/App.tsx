@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { getUserId, getSecret, getUsername, setUsername as saveUsername, clearUsername, getToken } from './identity';
+import { getUserId, getUsername, setUsername as saveUsername, clearUsername, getToken as getAnonToken } from './identity';
+import { useOptionalClerk } from './useOptionalClerk';
 import { useStore } from './store';
 import { connectSocket, getSocket } from './socket';
 import Sidebar from './Sidebar';
@@ -21,9 +22,18 @@ function TaskbarRoomTab() {
   return <div className="taskbar-tab active">💬 {label}</div>;
 }
 
+const clerkAvailable = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+
 export default function App() {
-  const userId = getUserId();
-  const [username, setUsernameState] = useState<string | null>(() => getUsername());
+  const { isLoaded: clerkLoaded, isSignedIn, user, getToken: getClerkToken, signOut, openSignIn } = useOptionalClerk();
+  const [anonUsername, setAnonUsername] = useState<string | null>(() => getUsername());
+  const activeMode: 'clerk' | 'anon' | null = isSignedIn ? 'clerk' : anonUsername ? 'anon' : null;
+  const userId = isSignedIn ? user!.id : getUserId();
+  const username = isSignedIn
+    ? (user!.username ?? user!.firstName ?? user!.emailAddresses[0]?.emailAddress ?? '')
+    : anonUsername;
+  const imageUrl = isSignedIn ? user!.imageUrl : undefined;
+  const getToken = isSignedIn ? getClerkToken : getAnonToken;
   const [nameInput, setNameInput] = useState('');
   const [startOpen, setStartOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
@@ -42,11 +52,13 @@ export default function App() {
   const setPresence = useStore((s) => s.setPresence);
 
   useEffect(() => {
-    if (!username) return;
+    if (!clerkLoaded) return;
+    if (!activeMode) return;
 
     async function init() {
-      const socket = connectSocket(userId, username!, getSecret());
       const token = await getToken();
+      if (!token) return;
+      const socket = connectSocket(token, username!, imageUrl);
 
       socket.on('new_message', (msg: Message) => {
         addMessage(msg);
@@ -102,19 +114,23 @@ export default function App() {
     }
 
     init();
-  }, [username]);
+  }, [activeMode, userId]);
 
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     const name = nameInput.trim();
     if (!name) return;
     saveUsername(name);
-    setUsernameState(name);
+    setAnonUsername(name);
   }
 
   function handleSignOut() {
+    if (isSignedIn) {
+      signOut();
+      return;
+    }
     clearUsername();
-    setUsernameState(null);
+    setAnonUsername(null);
   }
 
   async function handleSelectRoom(id: string) {
@@ -199,7 +215,15 @@ export default function App() {
     handleSelectRoom(room.id);
   }
 
-  if (!username) {
+  if (!clerkLoaded) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <span style={{ fontFamily: 'Tahoma', fontSize: 11, color: '#dce1e9' }}>Loading…</span>
+      </div>
+    );
+  }
+
+  if (!activeMode) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
         <div className="xp-window signin-window" style={{ width: 300 }}>
@@ -213,6 +237,14 @@ export default function App() {
             </div>
           </div>
           <form onSubmit={handleJoin} style={{ background: '#d4d0c8', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {clerkAvailable && (
+              <>
+                <button type="button" className="xp-button" onClick={() => openSignIn()}>
+                  Sign in with Google
+                </button>
+                <div style={{ textAlign: 'center', fontFamily: 'Tahoma', fontSize: 11, color: '#666' }}>— or —</div>
+              </>
+            )}
             <div style={{ fontFamily: 'Tahoma', fontSize: 13, fontWeight: 'bold', color: '#000' }}>
               pick a name to join
             </div>
@@ -261,7 +293,7 @@ export default function App() {
             <ChatPanel
               roomId={activeRoomId}
               currentUserId={userId}
-              currentUsername={username}
+              currentUsername={username!}
               getToken={getToken}
               onDeleteMessage={handleDeleteMessage}
               onLeaveRoom={handleLeaveRoom}
