@@ -13,11 +13,10 @@ export function useOptionalClerk() {
       user: null as null,
       getToken: async () => null as string | null,
       signOut: () => {},
-      openSignIn: () => {},
     };
   }
   const { isLoaded, isSignedIn, user } = useUser();
   const { getToken } = useAuth();
-  const { signOut, openSignIn } = useClerk();
-  return { isLoaded, isSignedIn, user, getToken, signOut, openSignIn };
+  const { signOut } = useClerk();
+  return { isLoaded, isSignedIn, user, getToken, signOut };
 }

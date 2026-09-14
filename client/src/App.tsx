@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SignIn } from '@clerk/clerk-react';
 import { getUserId, getUsername, setUsername as saveUsername, clearUsername, getToken as getAnonToken } from './identity';
 import { useOptionalClerk } from './useOptionalClerk';
 import { useStore } from './store';
@@ -25,7 +26,7 @@ function TaskbarRoomTab() {
 const clerkAvailable = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
 
 export default function App() {
-  const { isLoaded: clerkLoaded, isSignedIn, user, getToken: getClerkToken, signOut, openSignIn } = useOptionalClerk();
+  const { isLoaded: clerkLoaded, isSignedIn, user, getToken: getClerkToken, signOut } = useOptionalClerk();
   const [anonUsername, setAnonUsername] = useState<string | null>(() => getUsername());
   const activeMode: 'clerk' | 'anon' | null = isSignedIn ? 'clerk' : anonUsername ? 'anon' : null;
   const userId = isSignedIn ? user!.id : getUserId();
@@ -56,8 +57,20 @@ export default function App() {
     if (!activeMode) return;
 
     async function init() {
-      const token = await getToken();
-      if (!token) return;
+      // Clerk's getToken() can transiently resolve to null for a brief
+      // window right after an auto-restored session -- isSignedIn flips
+      // true from cached session data before Clerk's internal token
+      // refresh has actually finished. Retry a few times before giving up
+      // instead of silently rendering an empty chat with no error anywhere.
+      let token = await getToken();
+      for (let attempt = 0; attempt < 4 && !token; attempt++) {
+        await new Promise((r) => setTimeout(r, 300));
+        token = await getToken();
+      }
+      if (!token) {
+        console.error('[init] could not obtain an auth token, giving up');
+        return;
+      }
       const socket = connectSocket(token, username!, imageUrl);
 
       socket.on('new_message', (msg: Message) => {
@@ -226,7 +239,7 @@ export default function App() {
   if (!activeMode) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
-        <div className="xp-window signin-window" style={{ width: 300 }}>
+        <div className="xp-window signin-window" style={{ width: 360 }}>
           <div className="xp-titlebar">
             <img src={i9} style={{ width: 14, height: 14, imageRendering: 'pixelated', marginRight: 4 }} />
             <span className="xp-titlebar-text">Sign In — swwd gng</span>
@@ -236,33 +249,54 @@ export default function App() {
               <button className="xp-btn close">✕</button>
             </div>
           </div>
-          <form onSubmit={handleJoin} style={{ background: '#d4d0c8', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ background: '#d4d0c8', padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
             {clerkAvailable && (
               <>
-                <button type="button" className="xp-button" onClick={() => openSignIn()}>
-                  Sign in with Google
-                </button>
-                <div style={{ textAlign: 'center', fontFamily: 'Tahoma', fontSize: 11, color: '#666' }}>— or —</div>
+                {/* Hides the email/password fallback, the "Secured by Clerk" /
+                    dev-mode footer, and the card's own background/shadow/border
+                    via CSS only, so it blends into this one XP pane instead of
+                    floating as its own nested white box. The real fix for the
+                    email fallback is disabling "Email address" as a sign-in
+                    identifier in the Clerk dashboard (User & Authentication >
+                    Email, Phone, Username). Revert by dropping this appearance prop. */}
+                <SignIn
+                  routing="hash"
+                  appearance={{
+                    elements: {
+                      dividerRow: { display: 'none' },
+                      form: { display: 'none' },
+                      footerAction: { display: 'none' },
+                      footer: { display: 'none' },
+                      headerSubtitle: { display: 'none' },
+                      rootBox: { width: '100%' },
+                      cardBox: { width: '100%', boxShadow: 'none', background: 'transparent' },
+                      card: { width: '100%', boxShadow: 'none', background: 'transparent', border: 'none', padding: 0 },
+                    },
+                  }}
+                />
+                <div style={{ textAlign: 'center', fontFamily: 'Tahoma', fontSize: 11, color: '#666' }}>— or continue as guest —</div>
               </>
             )}
-            <div style={{ fontFamily: 'Tahoma', fontSize: 13, fontWeight: 'bold', color: '#000' }}>
-              pick a name to join
-            </div>
-            <div style={{ fontFamily: 'Tahoma', fontSize: 11, color: '#444' }}>
-              no account, no email — just a nickname. be nice.
-            </div>
-            <input
-              className="xp-input"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="nickname"
-              maxLength={24}
-              autoFocus
-            />
-            <button type="submit" className="xp-button" disabled={!nameInput.trim()}>
-              Enter chat →
-            </button>
-          </form>
+            <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontFamily: 'Tahoma', fontSize: 13, fontWeight: 'bold', color: '#000' }}>
+                pick a name to join
+              </div>
+              <div style={{ fontFamily: 'Tahoma', fontSize: 11, color: '#444' }}>
+                no account, no email — just a nickname. be nice.
+              </div>
+              <input
+                className="xp-input"
+                value={nameInput}
+                onChange={(e) => setNameInput(e.target.value)}
+                placeholder="nickname"
+                maxLength={24}
+                autoFocus
+              />
+              <button type="submit" className="xp-button" disabled={!nameInput.trim()}>
+                Enter chat →
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     );
@@ -313,22 +347,22 @@ export default function App() {
           </div>
           <div style={{ padding: 4 }}>
             <button onClick={() => { setProfileOpen(true); setStartOpen(false); }} style={{
-              width: '100%', textAlign: 'left', padding: '4px 8px',
+              width: '100%', textAlign: 'left', padding: '4px 8px', color: '#000',
               fontFamily: 'Tahoma', fontSize: 11, background: 'none',
               border: 'none', cursor: 'url(\'/14.png\') 0 0, pointer', display: 'flex', alignItems: 'center', gap: 8,
             }}
               onMouseEnter={e => { e.currentTarget.style.background = '#0a246a'; e.currentTarget.style.color = 'white'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = ''; }}>
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#000'; }}>
               <span style={{ fontSize: 16 }}>👤</span>
               My Profile
             </button>
             <button onClick={handleSignOut} style={{
-              width: '100%', textAlign: 'left', padding: '4px 8px',
+              width: '100%', textAlign: 'left', padding: '4px 8px', color: '#000',
               fontFamily: 'Tahoma', fontSize: 11, background: 'none',
               border: 'none', cursor: 'url(\'/14.png\') 0 0, pointer', display: 'flex', alignItems: 'center', gap: 8,
             }}
               onMouseEnter={e => { e.currentTarget.style.background = '#0a246a'; e.currentTarget.style.color = 'white'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = ''; }}>
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = '#000'; }}>
               <img src={i9} style={{ width: 16, height: 16, imageRendering: 'pixelated' }} />
               Sign Out
             </button>
