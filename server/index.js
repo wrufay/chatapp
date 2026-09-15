@@ -203,6 +203,13 @@ app.patch('/api/me', requireAuth, async (req, res) => {
     else if (VALID_COLOR_SCHEMES.has(req.body.color_scheme)) colorScheme = req.body.color_scheme;
   }
   const customFields = 'custom_fields' in req.body ? sanitizeCustomFields(req.body.custom_fields) : undefined;
+  // Only accept http(s) URLs (the Cloudinary URL POST /upload returns) --
+  // anything else (a bare string, a javascript: URI) is silently dropped
+  // rather than persisted into a field every viewer's browser renders as
+  // an <img src>.
+  const imageUrl = 'image_url' in req.body
+    ? (typeof req.body.image_url === 'string' && /^https:\/\//.test(req.body.image_url) ? req.body.image_url.slice(0, 500) : null)
+    : undefined;
   const updates = [];
   const values = [];
   let i = 1;
@@ -210,6 +217,7 @@ app.patch('/api/me', requireAuth, async (req, res) => {
   if (status !== undefined) { updates.push(`status = $${i++}`); values.push(status); }
   if (colorScheme !== undefined) { updates.push(`color_scheme = $${i++}`); values.push(colorScheme); }
   if (customFields !== undefined) { updates.push(`custom_fields = $${i++}`); values.push(JSON.stringify(customFields)); }
+  if (imageUrl !== undefined) { updates.push(`image_url = $${i++}`); values.push(imageUrl); }
   if (!updates.length) return res.status(400).json({ error: 'Nothing to update' });
   values.push(req.userId);
   const result = await pool.query(

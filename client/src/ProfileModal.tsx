@@ -34,6 +34,8 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
   const [status, setStatus] = useState('');
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
   const [colorScheme, setColorScheme] = useState(DEFAULT_COLOR_SCHEME);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const readOnly = !!userId;
 
@@ -51,10 +53,27 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
         setStatus(data.status ?? '');
         setCustomFields(data.custom_fields ?? []);
         setColorScheme(data.color_scheme && COLOR_SCHEMES[data.color_scheme] ? data.color_scheme : DEFAULT_COLOR_SCHEME);
+        setImageUrl(data.image_url ?? null);
       }
     }
     load();
   }, [userId]);
+
+  async function handlePhotoChange(file: File) {
+    setUploadingPhoto(true);
+    try {
+      const token = await getToken();
+      const form = new FormData();
+      form.append('image', file);
+      const res = await fetch(`${API}/upload`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.url) setImageUrl(data.url);
+      }
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function handleSave() {
     setSaving(true);
@@ -68,6 +87,7 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
           status: status.trim() || null,
           color_scheme: colorScheme,
           custom_fields: customFields.filter((f) => f.label.trim() || f.value.trim()),
+          image_url: imageUrl,
         }),
       });
       if (res.ok) {
@@ -77,6 +97,7 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
         setStatus(data.status ?? '');
         setCustomFields(data.custom_fields ?? []);
         setColorScheme(data.color_scheme && COLOR_SCHEMES[data.color_scheme] ? data.color_scheme : DEFAULT_COLOR_SCHEME);
+        setImageUrl(data.image_url ?? null);
         setEditing(false);
       }
     } finally {
@@ -90,6 +111,7 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
       setStatus(profile.status ?? '');
       setCustomFields(profile.custom_fields ?? []);
       setColorScheme(profile.color_scheme && COLOR_SCHEMES[profile.color_scheme] ? profile.color_scheme : DEFAULT_COLOR_SCHEME);
+      setImageUrl(profile.image_url ?? null);
     }
     setEditing(false);
   }
@@ -147,7 +169,23 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
             </div>
             <div className="profile-card-body" style={cardVars}>
               <div className="profile-photo-panel">
-                {profile.image_url ? (
+                {editing ? (
+                  <label className="profile-photo-edit">
+                    {imageUrl ? (
+                      <img src={imageUrl} alt={profile.username} className="profile-photo" />
+                    ) : (
+                      <div className="profile-photo">👤</div>
+                    )}
+                    <div className="profile-photo-overlay">{uploadingPhoto ? 'Uploading…' : 'Change'}</div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      disabled={uploadingPhoto}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePhotoChange(f); }}
+                    />
+                  </label>
+                ) : profile.image_url ? (
                   <img src={profile.image_url} alt={profile.username} className="profile-photo" />
                 ) : (
                   <div className="profile-photo">👤</div>

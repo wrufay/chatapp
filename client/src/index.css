@@ -312,6 +312,28 @@ body {
   background: #a6caf0;
 }
 
+.profile-photo-edit {
+  position: relative;
+  display: block;
+  width: 86px;
+  height: 86px;
+  cursor: url('./assets/14.png') 0 0, pointer;
+}
+.profile-photo-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  font-family: "Tahoma", sans-serif;
+  font-size: 10px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.profile-photo-edit:hover .profile-photo-overlay { opacity: 1; }
+
 .profile-content {
   flex: 1;
   min-width: 0;
