@@ -80,11 +80,17 @@ async function verifyIdentity(userId, secret, username) {
 
 // Clerk accounts (signed in with Google) live in the same `users` table as
 // anonymous ones; `secret` just stays NULL for them since Clerk verifies
-// identity on its own.
+// identity on its own. `image_url` is only seeded from Google on the very
+// first sign-in (the INSERT branch) -- once a row exists, this runs again
+// on every reconnect (page reload, network blip), and if it also
+// overwrote image_url on conflict it would silently stomp any custom
+// photo the user later uploads via their profile, snapping it back to
+// their Google avatar. Username stays synced since that's just display
+// text with no user-owned override to protect.
 async function upsertClerkUser(userId, username, imageUrl) {
   await pool.query(
     `INSERT INTO users (id, username, image_url) VALUES ($1, $2, $3)
-     ON CONFLICT (id) DO UPDATE SET username = $2, image_url = $3`,
+     ON CONFLICT (id) DO UPDATE SET username = $2`,
     [userId, username, imageUrl]
   );
 }
