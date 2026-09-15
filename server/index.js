@@ -8,6 +8,7 @@ const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const { clerkMiddleware, getAuth } = require('@clerk/express');
 const { verifyToken } = require('@clerk/backend');
+const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const redis = require('./redis');
 
@@ -40,6 +41,17 @@ app.set('etag', false);
 app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 app.use(express.json());
 if (clerkEnabled) app.use(clerkMiddleware());
+
+// Blunt per-IP cap across the whole REST API. Doesn't cover socket.io (it
+// attaches to the raw http.Server before Express's middleware chain runs),
+// so send_message and the connection handshake get their own Redis-backed
+// limiters further down instead.
+app.use(rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+}));
 
 // No accounts: identity is just a client-generated id + secret, both
 // persisted in the browser's localStorage. First request for an id wins and
@@ -438,8 +450,18 @@ app.post('/rooms/:id/messages/:msgId/react', requireAuth, async (req, res) => {
   const msgId = req.params.msgId;
   const userId = req.userId;
 
-  const existing = await pool.query('SELECT reactions FROM messages WHERE id = $1', [msgId]);
+  const existing = await pool.query('SELECT reactions, room_id FROM messages WHERE id = $1', [msgId]);
   if (!existing.rows.length) return res.status(404).json({ error: 'Not found' });
+  const roomId = existing.rows[0].room_id;
+
+  const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [roomId]);
+  if (roomRow.rows[0]?.is_dm || roomRow.rows[0]?.is_group) {
+    const member = await pool.query(
+      'SELECT 1 FROM room_members WHERE room_id = $1 AND user_id = $2',
+      [roomId, userId]
+    );
+    if (!member.rows.length) return res.status(403).json({ error: 'Forbidden' });
+  }
 
   const reactions = existing.rows[0].reactions || {};
   if (!reactions[emoji]) reactions[emoji] = [];
@@ -452,13 +474,26 @@ app.post('/rooms/:id/messages/:msgId/react', requireAuth, async (req, res) => {
   }
 
   await pool.query('UPDATE messages SET reactions = $1 WHERE id = $2', [JSON.stringify(reactions), msgId]);
-  const roomId = parseInt(req.params.id);
   io.to(`room:${roomId}`).emit('reaction_updated', { roomId, messageId: parseInt(msgId), reactions });
   res.json({ reactions });
 });
 
+// Fixed-window rate limit backed by redis (INCR + EXPIRE) -- covers the
+// socket.io paths, which never pass through Express's middleware chain
+// (and therefore the express-rate-limit instance above) since socket.io
+// attaches directly to the raw http.Server ahead of Express's router.
+async function checkRateLimit(key, limit, windowSeconds) {
+  const count = await redis.incr(key);
+  if (count === 1) await redis.expire(key, windowSeconds);
+  return count <= limit;
+}
+
 // Socket.io
 io.use(async (socket, next) => {
+  const ip = socket.handshake.address || 'unknown';
+  const withinLimit = await checkRateLimit(`ratelimit:connect:${ip}`, 30, 60).catch(() => true);
+  if (!withinLimit) return next(new Error('Too many connection attempts'));
+
   const { token, username, imageUrl } = socket.handshake.auth;
   if (!token) return next(new Error('No identity'));
   if (token.split('.').length === 3) {
@@ -537,6 +572,8 @@ io.on('connection', (socket) => {
   socket.on('send_message', async ({ roomId, content, imageUrl, replyToId }, ack) => {
     try {
       if (!content?.trim() && !imageUrl) return;
+      const withinLimit = await checkRateLimit(`ratelimit:msg:${socket.userId}`, 15, 10).catch(() => true);
+      if (!withinLimit) return ack?.({ error: 'Sending too fast, slow down' });
       const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [roomId]);
       if (!roomRow.rows.length) return ack?.({ error: 'Room not found' });
       if (roomRow.rows[0].is_dm || roomRow.rows[0].is_group) {
