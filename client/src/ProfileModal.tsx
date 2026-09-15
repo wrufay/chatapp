@@ -139,6 +139,12 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
           </div>
         ) : (
           <>
+            <div className="profile-menubar" style={cardVars}>
+              <span>File</span>
+              <span>Edit</span>
+              <span>View</span>
+              <span>Help</span>
+            </div>
             <div className="profile-card-body" style={cardVars}>
               <div className="profile-photo-panel">
                 {profile.image_url ? (
@@ -146,16 +152,13 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
                 ) : (
                   <div className="profile-photo">👤</div>
                 )}
-              </div>
-              <div className="profile-content">
-                <div className="profile-name">{profile.username}</div>
 
                 {editing ? (
                   <input
                     className="xp-input"
                     value={status}
                     onChange={(e) => setStatus(e.target.value)}
-                    placeholder="a little tagline about you"
+                    placeholder="a little tagline"
                     maxLength={100}
                     autoFocus
                   />
@@ -169,13 +172,21 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
                   {SCHEME_KEYS.map((key) => (
                     <div
                       key={key}
-                      className={`profile-swatch-dot${editing ? ' selectable' : ''}${editing && key === colorScheme ? ' active' : ''}`}
-                      style={{ background: COLOR_SCHEMES[key].accent }}
-                      title={COLOR_SCHEMES[key].name}
+                      className={`profile-swatch-item${editing ? ' selectable' : ''}`}
                       onClick={editing ? () => setColorScheme(key) : undefined}
-                    />
+                    >
+                      <div
+                        className={`profile-swatch-dot${editing ? ' selectable' : ''}${editing && key === colorScheme ? ' active' : ''}`}
+                        style={{ background: COLOR_SCHEMES[key].accent }}
+                        title={COLOR_SCHEMES[key].name}
+                      />
+                      <span className="profile-swatch-hex">{COLOR_SCHEMES[key].accent.slice(1).toUpperCase()}</span>
+                    </div>
                   ))}
                 </div>
+              </div>
+              <div className="profile-content">
+                <div className="profile-name">{profile.username}</div>
 
                 <div className="profile-stats">
                   <div className="profile-stat-row">
@@ -236,7 +247,10 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
                     maxLength={300}
                   />
                 ) : profile.bio ? (
-                  <div className="profile-bio">{profile.bio}</div>
+                  <>
+                    <div className="profile-divider" />
+                    <div className="profile-bio">{profile.bio}</div>
+                  </>
                 ) : null}
               </div>
             </div>
