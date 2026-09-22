@@ -11,6 +11,8 @@ const { verifyToken } = require('@clerk/backend');
 const rateLimit = require('express-rate-limit');
 const pool = require('./db');
 const redis = require('./redis');
+const { parseAuthToken } = require('./lib/authToken');
+const { toggleReaction } = require('./lib/reactions');
 
 const clerkEnabled = !!(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
 
@@ -95,22 +97,19 @@ async function upsertClerkUser(userId, username, imageUrl) {
   );
 }
 
-// Anon tokens are `${userId}.${secret}` (2 dot-segments); Clerk session
-// tokens are JWTs (always 3). That's enough to tell the two auth modes
-// apart without a separate flag on the wire.
 async function requireAuth(req, res, next) {
   const auth = req.headers.authorization || '';
   const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
-  if (!token) return res.status(401).json({ error: 'Unauthorized' });
-  if (token.split('.').length === 3) {
+  const parsed = parseAuthToken(token);
+  if (!parsed) return res.status(401).json({ error: 'Unauthorized' });
+  if (parsed.mode === 'clerk') {
     if (!clerkEnabled) return res.status(401).json({ error: 'Unauthorized' });
     const { userId } = getAuth(req);
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     req.userId = userId;
     return next();
   }
-  const [userId, secret] = token.split('.');
-  if (!userId || !secret) return res.status(401).json({ error: 'Unauthorized' });
+  const { userId, secret } = parsed;
   const ok = await verifyIdentity(userId, secret);
   if (!ok) return res.status(403).json({ error: 'Forbidden' });
   req.userId = userId;
@@ -477,15 +476,7 @@ app.post('/rooms/:id/messages/:msgId/react', requireAuth, async (req, res) => {
     if (!member.rows.length) return res.status(403).json({ error: 'Forbidden' });
   }
 
-  const reactions = existing.rows[0].reactions || {};
-  if (!reactions[emoji]) reactions[emoji] = [];
-  const idx = reactions[emoji].indexOf(userId);
-  if (idx === -1) {
-    reactions[emoji].push(userId);
-  } else {
-    reactions[emoji].splice(idx, 1);
-    if (reactions[emoji].length === 0) delete reactions[emoji];
-  }
+  const reactions = toggleReaction(existing.rows[0].reactions || {}, emoji, userId);
 
   await pool.query('UPDATE messages SET reactions = $1 WHERE id = $2', [JSON.stringify(reactions), msgId]);
   io.to(`room:${roomId}`).emit('reaction_updated', { roomId, messageId: parseInt(msgId), reactions });
@@ -509,8 +500,9 @@ io.use(async (socket, next) => {
   if (!withinLimit) return next(new Error('Too many connection attempts'));
 
   const { token, username, imageUrl } = socket.handshake.auth;
-  if (!token) return next(new Error('No identity'));
-  if (token.split('.').length === 3) {
+  const parsed = parseAuthToken(token);
+  if (!parsed) return next(new Error('No identity'));
+  if (parsed.mode === 'clerk') {
     if (!clerkEnabled) return next(new Error('Clerk not configured'));
     try {
       const payload = await verifyToken(token, { secretKey: process.env.CLERK_SECRET_KEY });
@@ -522,8 +514,7 @@ io.use(async (socket, next) => {
     }
     return next();
   }
-  const [userId, secret] = token.split('.');
-  if (!userId || !secret) return next(new Error('No identity'));
+  const { userId, secret } = parsed;
   const ok = await verifyIdentity(userId, secret, username).catch(() => false);
   if (!ok) return next(new Error('Identity mismatch'));
   socket.userId = userId;
