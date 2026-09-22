@@ -38,6 +38,7 @@ export default function App() {
   const [nameInput, setNameInput] = useState('');
   const [startOpen, setStartOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [loadingRooms, setLoadingRooms] = useState(true);
   const setRooms = useStore((s) => s.setRooms);
   const addRoom = useStore((s) => s.addRoom);
   const activeRoomId = useStore((s) => s.activeRoomId);
@@ -57,6 +58,7 @@ export default function App() {
     if (!activeMode) return;
 
     async function init() {
+      setLoadingRooms(true);
       // Clerk's getToken() can transiently resolve to null for a brief
       // window right after an auto-restored session -- isSignedIn flips
       // true from cached session data before Clerk's internal token
@@ -69,6 +71,7 @@ export default function App() {
       }
       if (!token) {
         console.error('[init] could not obtain an auth token, giving up');
+        setLoadingRooms(false);
         return;
       }
       const socket = connectSocket(token, username!, imageUrl);
@@ -119,11 +122,15 @@ export default function App() {
         if (activeRoom) socket.emit('join_room', activeRoom);
       });
 
-      const res = await fetch(`${API}/rooms`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const rooms = await res.json();
-      if (Array.isArray(rooms)) setRooms(rooms);
+      try {
+        const res = await fetch(`${API}/rooms`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const rooms = await res.json();
+        if (Array.isArray(rooms)) setRooms(rooms);
+      } finally {
+        setLoadingRooms(false);
+      }
     }
 
     init();
@@ -322,6 +329,7 @@ export default function App() {
             onCreateGroup={handleCreateGroup}
             getToken={getToken}
             currentUserId={userId}
+            loadingRooms={loadingRooms}
           />
           <div className="chat-area">
             <ChatPanel

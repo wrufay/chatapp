@@ -24,9 +24,10 @@ interface Props {
   onCreateGroup: (name: string, memberIds: string[]) => void;
   getToken: () => Promise<string | null>;
   currentUserId: string;
+  loadingRooms: boolean;
 }
 
-export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreateGroup, getToken, currentUserId }: Props) {
+export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreateGroup, getToken, currentUserId, loadingRooms }: Props) {
   const rooms = useStore((s) => s.rooms);
   const activeRoomId = useStore((s) => s.activeRoomId);
   const unreadCounts = useStore((s) => s.unreadCounts);
@@ -34,12 +35,15 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
   const onlineUserIds = new Set(Object.values(presenceByRoom).flat());
   const [newRoomName, setNewRoomName] = useState('');
   const [creating, setCreating] = useState(false);
+  const [submittingRoom, setSubmittingRoom] = useState(false);
   const [dmPickerOpen, setDmPickerOpen] = useState(false);
   const [groupPickerOpen, setGroupPickerOpen] = useState(false);
   const [users, setUsers] = useState<User[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [submittingGroup, setSubmittingGroup] = useState(false);
+  const [startingDMId, setStartingDMId] = useState<string | null>(null);
 
   const publicRooms = rooms.filter((r) => !r.is_dm && !r.is_group);
   const groups = rooms.filter((r) => r.is_group);
@@ -48,9 +52,14 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     if (!newRoomName.trim()) return;
-    await onCreateRoom(newRoomName.trim());
-    setNewRoomName('');
-    setCreating(false);
+    setSubmittingRoom(true);
+    try {
+      await onCreateRoom(newRoomName.trim());
+      setNewRoomName('');
+      setCreating(false);
+    } finally {
+      setSubmittingRoom(false);
+    }
   }
 
   async function loadUsers() {
@@ -88,10 +97,25 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
   async function handleCreateGroup(e: React.FormEvent) {
     e.preventDefault();
     if (!groupName.trim() || selectedMembers.length === 0) return;
-    await onCreateGroup(groupName.trim(), selectedMembers);
-    setGroupPickerOpen(false);
-    setGroupName('');
-    setSelectedMembers([]);
+    setSubmittingGroup(true);
+    try {
+      await onCreateGroup(groupName.trim(), selectedMembers);
+      setGroupPickerOpen(false);
+      setGroupName('');
+      setSelectedMembers([]);
+    } finally {
+      setSubmittingGroup(false);
+    }
+  }
+
+  async function handleStartDM(targetUserId: string) {
+    setStartingDMId(targetUserId);
+    try {
+      await onStartDM(targetUserId);
+      setDmPickerOpen(false);
+    } finally {
+      setStartingDMId(null);
+    }
   }
 
   return (
@@ -102,7 +126,9 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
         Rooms
       </div>
       <div className="sidebar-section">
-        {publicRooms.map((room) => (
+        {loadingRooms ? (
+          <div style={{ fontFamily: 'Tahoma', fontSize: 10, color: '#666', padding: '6px 10px' }}>Loading rooms…</div>
+        ) : publicRooms.map((room) => (
           <div
             key={room.id}
             className={`room-item${activeRoomId === room.id ? ' active' : ''}`}
@@ -123,10 +149,13 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
               onChange={(e) => setNewRoomName(e.target.value)}
               placeholder="room name"
               autoFocus
+              disabled={submittingRoom}
             />
             <div style={{ display: 'flex', gap: 4 }}>
-              <button type="submit" className="xp-button" style={{ flex: 1 }}>OK</button>
-              <button type="button" className="xp-button" onClick={() => setCreating(false)}>✕</button>
+              <button type="submit" className="xp-button" style={{ flex: 1 }} disabled={submittingRoom}>
+                {submittingRoom ? 'Creating…' : 'OK'}
+              </button>
+              <button type="button" className="xp-button" onClick={() => setCreating(false)} disabled={submittingRoom}>✕</button>
             </div>
           </form>
         ) : (
@@ -196,9 +225,9 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
               type="submit"
               className="xp-button"
               style={{ width: '100%' }}
-              disabled={!groupName.trim() || selectedMembers.length === 0}
+              disabled={!groupName.trim() || selectedMembers.length === 0 || submittingGroup}
             >
-              Create
+              {submittingGroup ? 'Creating…' : 'Create'}
             </button>
           </form>
         ) : (
@@ -256,8 +285,8 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
                 <div
                   key={u.id}
                   className="room-item"
-                  onClick={() => { onStartDM(u.id); setDmPickerOpen(false); }}
-                  style={{ gap: 6 }}
+                  onClick={() => { if (!startingDMId) handleStartDM(u.id); }}
+                  style={{ gap: 6, opacity: startingDMId && startingDMId !== u.id ? 0.5 : 1 }}
                 >
                   {u.image_url ? (
                     <img src={u.image_url} style={{ width: 14, height: 14, borderRadius: '50%', flexShrink: 0, objectFit: 'cover' }} />
@@ -265,6 +294,7 @@ export default function Sidebar({ onSelectRoom, onCreateRoom, onStartDM, onCreat
                     <span style={{ fontSize: 11 }}>👤</span>
                   )}
                   {u.username}
+                  {startingDMId === u.id && <span style={{ marginLeft: 'auto', fontSize: 10, color: '#666' }}>opening…</span>}
                 </div>
               ))
             )}

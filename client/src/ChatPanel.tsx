@@ -55,10 +55,13 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   const [invitePickerOpen, setInvitePickerOpen] = useState(false);
   const [inviteUsers, setInviteUsers] = useState<User[]>([]);
   const [loadingInvite, setLoadingInvite] = useState(false);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [loadingMessages, setLoadingMessages] = useState(false);
 
   useEffect(() => {
     if (!roomId) return;
     async function load() {
+      setLoadingMessages(true);
       try {
         const token = await getToken();
         const res = await fetch(`${API}/rooms/${roomId}/messages`, {
@@ -68,6 +71,8 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
         if (Array.isArray(data)) setMessages(roomId!, data);
       } catch (err) {
         console.error('Failed to load messages:', err);
+      } finally {
+        setLoadingMessages(false);
       }
     }
     load();
@@ -255,12 +260,14 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
   }
 
   async function handleInvite(userId: string) {
+    setInvitingId(userId);
     const token = await getToken();
     const res = await fetch(`${API}/groups/${roomId}/members`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({ userId }),
     });
+    setInvitingId(null);
     if (res.ok) {
       const invited = inviteUsers.find((u) => u.id === userId);
       if (invited) setGroupMembers((prev) => [...prev, invited]);
@@ -352,12 +359,13 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
                   className="xp-button"
                   style={{ fontSize: 10, padding: '1px 6px', display: 'flex', alignItems: 'center', gap: 4 }}
                   onClick={() => handleInvite(u.id)}
+                  disabled={invitingId === u.id}
                 >
                   {u.image_url
                     ? <img src={u.image_url} style={{ width: 12, height: 12, borderRadius: '50%', objectFit: 'cover' }} />
                     : '👤'
                   }
-                  {u.username}
+                  {invitingId === u.id ? 'Inviting…' : u.username}
                 </button>
               ))}
             </div>
@@ -367,6 +375,11 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
 
       <div className="xp-body">
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+          {loadingMessages && messages.length === 0 && (
+            <div style={{ padding: '16px 0', textAlign: 'center', fontFamily: 'Tahoma', fontSize: 11, color: '#999' }}>
+              Loading messages…
+            </div>
+          )}
           {messages.map((msg, i) => {
             const seenBy = msg.user_id !== currentUserId ? [] : Object.entries(readReceipts)
               .filter(([uid, r]) => r.messageId === msg.id && uid !== currentUserId)
