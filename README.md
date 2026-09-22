@@ -1,6 +1,6 @@
 # chatapp
 
-a real-time chat app with a windows xp aesthetic. react + vite on the frontend, node/express + socket.io on the backend, postgres for storage, redis for presence/typing. no accounts — you pick a nickname and go, identity is just a random id+secret kept in your browser's localStorage.
+a real-time chat app with a windows xp aesthetic. react + vite on the frontend, node/express + socket.io on the backend, postgres for storage, redis for presence/typing. sign in with a nickname (identity is a random id+secret kept in your browser's localStorage) or, if the server has Clerk configured, with Google — both land in the same `users` table.
 
 ## what you need
 
@@ -96,11 +96,15 @@ npm run dev       # starts on port 5173
 
 ## features
 
-- create rooms + real-time messaging via socket.io
+- create rooms, direct messages, and group chats + real-time messaging via socket.io
 - typing indicators (redis-backed, expire after 5s)
-- message reactions (toggle on/off, stored in jsonb)
-- presence tracking per room
-- anonymous nickname identity — no accounts, no email, just a localStorage id+secret
+- message reactions (toggle on/off, stored in jsonb) and replies
+- read receipts and per-room online presence (redis-backed)
+- message deletion
+- image uploads via cloudinary
+- user profiles — avatar, bio, status, color scheme, custom fields — viewable by clicking a username
+- anonymous nickname identity by default, with optional "sign in with Google" via clerk
+- sound notification on new messages (web audio api)
 - windows xp aesthetic — titlebars, beveled borders, tahoma font
 
 ---
@@ -114,18 +118,16 @@ npm run dev       # starts on port 5173
 
 ## todos
 
-- [ ] direct messages
-- [ ] file/image uploads
-- [ ] message editing + deletion
-- [ ] user profiles
-- [ ] notifications
+- [ ] message editing
+- [ ] browser/desktop notifications (currently just an in-tab sound)
 
 ---
 
 ## database schema
 
 ```sql
-users     (id TEXT PK, username, image_url, secret, bio, status, created_at)
-rooms     (id SERIAL PK, name UNIQUE, created_by, created_at)
-messages  (id SERIAL PK, room_id, user_id, username, content, reactions JSONB, created_at)
+users        (id TEXT PK, username, image_url, secret, bio, status, color_scheme, custom_fields JSONB, created_at)
+rooms        (id SERIAL PK, name UNIQUE, created_by, is_dm, is_group, created_at)
+room_members (room_id, user_id)  -- membership for DMs/groups
+messages     (id SERIAL PK, room_id, user_id, username, content, image_url, reactions JSONB, reply_to_id, created_at)
 ```
