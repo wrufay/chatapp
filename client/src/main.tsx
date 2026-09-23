@@ -14,7 +14,7 @@ createRoot(document.getElementById('root')!).render(
         localization={{
           signIn: {
             start: {
-              title: 'Sign in to swwd gng',
+              title: '✿ sign in',
               subtitle: '',
             },
           },
