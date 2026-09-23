@@ -13,6 +13,7 @@ const pool = require('./db');
 const redis = require('./redis');
 const { parseAuthToken } = require('./lib/authToken');
 const { toggleReaction } = require('./lib/reactions');
+const { isProfane } = require('./lib/moderation');
 
 const clerkEnabled = !!(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
 
@@ -579,6 +580,7 @@ io.on('connection', (socket) => {
       if (!content?.trim() && !imageUrl) return;
       const withinLimit = await checkRateLimit(`ratelimit:msg:${socket.userId}`, 15, 10).catch(() => true);
       if (!withinLimit) return ack?.({ error: 'Sending too fast, slow down' });
+      if (isProfane(content)) return ack?.({ error: 'Message blocked -- try rephrasing' });
       const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [roomId]);
       if (!roomRow.rows.length) return ack?.({ error: 'Room not found' });
       if (roomRow.rows[0].is_dm || roomRow.rows[0].is_group) {
