@@ -19,6 +19,7 @@ interface Profile {
   custom_fields: CustomField[];
   messageCount: number;
   messagePercent: number;
+  role: string;
 }
 
 interface Props {
@@ -224,7 +225,10 @@ export default function ProfileModal({ onClose, getToken, userId }: Props) {
                 </div>
               </div>
               <div className="profile-content">
-                <div className="profile-name">{profile.username}</div>
+                <div className="profile-name">
+                  {profile.username}
+                  {profile.role === 'admin' && <span className="profile-admin-badge">★ Admin</span>}
+                </div>
 
                 <div className="profile-stats">
                   <div className="profile-stat-row">

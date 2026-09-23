@@ -64,6 +64,7 @@ export default function App() {
   const [startOpen, setStartOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [loadingRooms, setLoadingRooms] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const setRooms = useStore((s) => s.setRooms);
   const addRoom = useStore((s) => s.addRoom);
   const activeRoomId = useStore((s) => s.activeRoomId);
@@ -210,6 +211,14 @@ export default function App() {
         });
         const rooms = await res.json();
         if (Array.isArray(rooms)) setRooms(rooms);
+
+        const meRes = await fetch(`${API}/api/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (meRes.ok) {
+          const me = await meRes.json();
+          setIsAdmin(me.role === "admin");
+        }
       } finally {
         setLoadingRooms(false);
       }
@@ -462,6 +471,7 @@ export default function App() {
               getToken={getToken}
               onDeleteMessage={handleDeleteMessage}
               onLeaveRoom={handleLeaveRoom}
+              isAdmin={isAdmin}
             />
           </div>
         </div>

@@ -18,9 +18,10 @@ interface Props {
   getToken: () => Promise<string | null>;
   onDeleteMessage: (roomId: string, msgId: string) => void;
   onLeaveRoom: (roomId: string) => void;
+  isAdmin: boolean;
 }
 
-export default function ChatPanel({ roomId, currentUserId, currentUsername, getToken, onDeleteMessage, onLeaveRoom }: Props) {
+export default function ChatPanel({ roomId, currentUserId, currentUsername, getToken, onDeleteMessage, onLeaveRoom, isAdmin }: Props) {
   const messages = useStore((s) => (roomId ? s.messages[roomId] : undefined)) ?? [];
   const typingUsers = useStore((s) => (roomId ? s.typingUsers[roomId] : undefined)) ?? [];
   const readReceipts = useStore((s) => (roomId ? s.readReceipts[roomId] : undefined)) ?? {};
@@ -391,7 +392,7 @@ export default function ChatPanel({ roomId, currentUserId, currentUsername, getT
                   prevMsg={messages[i - 1]}
                   currentUserId={currentUserId}
                   onReact={(msgId, emoji) => handleReact(msgId, emoji)}
-                  onDelete={msg.user_id === currentUserId ? () => onDeleteMessage(roomId, msg.id) : undefined}
+                  onDelete={(msg.user_id === currentUserId || isAdmin) ? () => onDeleteMessage(roomId, msg.id) : undefined}
                   onReply={handleReply}
                   doubleTapEmoji={doubleTapEmoji}
                   onChangeDoubleTap={handleChangeDoubleTap}
