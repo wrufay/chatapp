@@ -51,6 +51,9 @@ async function migrate() {
     ALTER TABLE users ADD COLUMN IF NOT EXISTS color_scheme TEXT;
     ALTER TABLE users ADD COLUMN IF NOT EXISTS custom_fields JSONB DEFAULT '[]';
   `);
+  await pool.query(`
+    ALTER TABLE users ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member';
+  `);
   console.log('Migration complete');
   await pool.end();
 }

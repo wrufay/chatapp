@@ -13,6 +13,8 @@ const pool = require('./db');
 const redis = require('./redis');
 const { parseAuthToken } = require('./lib/authToken');
 const { toggleReaction } = require('./lib/reactions');
+const { isProfane } = require('./lib/moderation');
+const { VALID_ROLES, isAdminRole, canDeleteMessage } = require('./lib/permissions');
 
 const clerkEnabled = !!(process.env.CLERK_SECRET_KEY && process.env.CLERK_PUBLISHABLE_KEY);
 
@@ -116,6 +118,22 @@ async function requireAuth(req, res, next) {
   next();
 }
 
+async function getUserRole(userId) {
+  const { rows } = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
+  return rows[0]?.role ?? 'member';
+}
+
+// Chained after requireAuth on admin-only routes. There's no self-service
+// promotion endpoint -- the first admin is set directly in the database, and
+// every admin after that is promoted by an existing admin (PATCH
+// /api/users/:id/role), so this can't be used to bootstrap your own access.
+async function requireAdmin(req, res, next) {
+  const role = await getUserRole(req.userId);
+  if (!isAdminRole(role)) return res.status(403).json({ error: 'Admin only' });
+  req.userRole = role;
+  next();
+}
+
 // REST: POST /upload
 app.post('/upload', requireAuth, upload.single('image'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No image' });
@@ -188,7 +206,7 @@ async function getMessageStats(userId) {
 // REST: GET /api/me — get current user's profile
 app.get('/api/me', requireAuth, async (req, res) => {
   const result = await pool.query(
-    'SELECT id, username, image_url, bio, status, color_scheme, custom_fields FROM users WHERE id = $1',
+    'SELECT id, username, image_url, bio, status, color_scheme, custom_fields, role FROM users WHERE id = $1',
     [req.userId]
   );
   if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
@@ -237,12 +255,24 @@ app.patch('/api/me', requireAuth, async (req, res) => {
 // REST: GET /api/users/:id — fetch another user's public profile
 app.get('/api/users/:id', requireAuth, async (req, res) => {
   const result = await pool.query(
-    'SELECT id, username, image_url, bio, status, color_scheme, custom_fields FROM users WHERE id = $1',
+    'SELECT id, username, image_url, bio, status, color_scheme, custom_fields, role FROM users WHERE id = $1',
     [req.params.id]
   );
   if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
   const stats = await getMessageStats(req.params.id);
   res.json({ ...result.rows[0], ...stats });
+});
+
+// REST: PATCH /api/users/:id/role — promote/demote a user (admin only)
+app.patch('/api/users/:id/role', requireAuth, requireAdmin, async (req, res) => {
+  const { role } = req.body;
+  if (!VALID_ROLES.has(role)) return res.status(400).json({ error: 'Invalid role' });
+  const result = await pool.query(
+    'UPDATE users SET role = $1 WHERE id = $2 RETURNING id, username, role',
+    [role, req.params.id]
+  );
+  if (!result.rows.length) return res.status(404).json({ error: 'User not found' });
+  res.json(result.rows[0]);
 });
 
 // REST: POST /dms — create or retrieve a DM room between two users
@@ -412,11 +442,13 @@ app.get('/rooms/:id/messages', requireAuth, async (req, res) => {
   res.json(result.rows);
 });
 
-// REST: DELETE /rooms/:id/messages/:msgId — delete own message
+// REST: DELETE /rooms/:id/messages/:msgId — delete own message, or any message if admin
 app.delete('/rooms/:id/messages/:msgId', requireAuth, async (req, res) => {
   const existing = await pool.query('SELECT user_id, room_id FROM messages WHERE id = $1', [req.params.msgId]);
   if (!existing.rows.length) return res.status(404).json({ error: 'Not found' });
-  if (existing.rows[0].user_id !== req.userId) return res.status(403).json({ error: 'Forbidden' });
+  const callerRole = await getUserRole(req.userId);
+  if (!canDeleteMessage({ authorId: existing.rows[0].user_id, callerId: req.userId, callerRole }))
+    return res.status(403).json({ error: 'Forbidden' });
   await pool.query('DELETE FROM messages WHERE id = $1', [req.params.msgId]);
   const roomId = existing.rows[0].room_id;
   io.to(`room:${roomId}`).emit('message_deleted', { roomId: String(roomId), messageId: String(req.params.msgId) });
@@ -579,6 +611,7 @@ io.on('connection', (socket) => {
       if (!content?.trim() && !imageUrl) return;
       const withinLimit = await checkRateLimit(`ratelimit:msg:${socket.userId}`, 15, 10).catch(() => true);
       if (!withinLimit) return ack?.({ error: 'Sending too fast, slow down' });
+      if (isProfane(content)) return ack?.({ error: 'Message blocked -- try rephrasing' });
       const roomRow = await pool.query('SELECT is_dm, is_group FROM rooms WHERE id = $1', [roomId]);
       if (!roomRow.rows.length) return ack?.({ error: 'Room not found' });
       if (roomRow.rows[0].is_dm || roomRow.rows[0].is_group) {

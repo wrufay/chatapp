@@ -6,10 +6,6 @@ const EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 function getAccentColor(username: string): string {
   if (!username) return '#333';
-  const h = username.toLowerCase();
-  if (h.includes('jackson')) return '#53d8fb';
-  if (h.includes('justin')) return '#66c3ff';
-  if (h.includes('fay')) return '#d4afb9';
   const colors = ['#53d8fb', '#66c3ff', '#d4afb9', '#a6caf0', '#f0a6a6', '#a6f0b4'];
   let sum = 0;
   for (const c of username) sum += c.charCodeAt(0);
