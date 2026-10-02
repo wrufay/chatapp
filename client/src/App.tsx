@@ -61,6 +61,7 @@ export default function App() {
   const imageUrl = isSignedIn ? user!.imageUrl : undefined;
   const getToken = isSignedIn ? getClerkToken : getAnonToken;
   const [nameInput, setNameInput] = useState("");
+  const [joinError, setJoinError] = useState("");
   const [startOpen, setStartOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [loadingRooms, setLoadingRooms] = useState(true);
@@ -230,7 +231,11 @@ export default function App() {
   function handleJoin(e: React.FormEvent) {
     e.preventDefault();
     const name = nameInput.trim();
-    if (!name) return;
+    if (!name) {
+      setJoinError("please enter a name!");
+      return;
+    }
+    setJoinError("");
     saveUsername(name);
     setAnonUsername(name);
   }
@@ -403,23 +408,26 @@ export default function App() {
             )}
             <form onSubmit={handleJoin} className="signin-guest-form">
               <div className="signin-guest-title">or: join as a guest!</div>
-              <div className="signin-guest-hint">
-                choose something to identify yourself.
-              </div>
+              {joinError ? (
+                <div className="signin-guest-error">⚠ {joinError}</div>
+              ) : (
+                <div className="signin-guest-hint">
+                  choose something to identify yourself.
+                </div>
+              )}
               <input
                 className="xp-input"
                 value={nameInput}
-                onChange={(e) => setNameInput(e.target.value)}
+                onChange={(e) => {
+                  setNameInput(e.target.value);
+                  if (joinError) setJoinError("");
+                }}
                 placeholder="my name is..."
                 maxLength={24}
                 autoFocus
               />
-              <button
-                type="submit"
-                className="xp-button"
-                disabled={!nameInput.trim()}
-              >
-                start chatting ☞
+              <button type="submit" className="xp-button">
+                start talking retro!
               </button>
             </form>
           </div>
