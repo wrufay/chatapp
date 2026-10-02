@@ -109,3 +109,29 @@ ruled out for that specific job as a bad match for short, low-signal chat
 text). 5 new unit tests (`server/test/permissions.test.js`). Requires a
 migration run before deploying (`npm run migrate` in `server/`) and a
 manual one-time SQL update to bootstrap the first admin.
+
+---
+
+## 2026-10-02 — Merged pre-launch-hardening into main, bootstrapped the first admin
+
+**What:** Merged `chore/pre-launch-hardening` (the 6 commits above) into
+`main` locally, then deployed the role column to the live database and
+made the first admin account real.
+
+**How:** Re-ran the full verification suite (server tests, client
+tsc/lint/build) on the branch tip first, including a commit that wasn't
+mine (`fc09d9b`, an empty-name-field error message), since it hadn't been
+checked yet — all green, then `git merge --no-ff`. Ran `npm run migrate`
+against the live Neon database (the `role` column didn't exist there yet).
+Queried `users` directly to find the right row before touching anything —
+the table has ~49 rows, almost all leftover test/security-probe accounts
+(`idorA`, `verifyuser...`, `readonlyA...`, etc.) plus a handful of real
+friend accounts. Confirmed with the user which row was actually theirs
+(`Fay`, the Clerk/Google account, oldest real entry) before running the
+`UPDATE users SET role = 'admin'`.
+
+**Impact:** `main` now has everything from the hardening branch, still
+only local (not pushed to `origin` yet). The live production database now
+has a real admin (`Fay`) who can delete any message in any room — the
+admin-roles feature shipped in code earlier is now actually usable on the
+deployed app, not just locally.
