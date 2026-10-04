@@ -135,3 +135,19 @@ only local (not pushed to `origin` yet). The live production database now
 has a real admin (`Fay`) who can delete any message in any room — the
 admin-roles feature shipped in code earlier is now actually usable on the
 deployed app, not just locally.
+
+---
+
+## 2026-10-03 — Dropped unused Londrina Outline font import
+
+**What:** `index.css` imported the `Londrina Outline` Google Font, but
+nothing in the app references it — it was carried over from the sibling
+portfolio project's logo font.
+
+**How:** Removed `&family=Londrina+Outline` from the single `@import` URL
+at the top of `client/src/index.css`. Confirmed with `grep` that no
+`Londrina` references exist in `client/src/`, and `vite build` passes.
+
+**Impact:** One fewer font request on every page load, and one less piece
+of unrelated branding left in the code. No visual change — the font was
+never rendered.
